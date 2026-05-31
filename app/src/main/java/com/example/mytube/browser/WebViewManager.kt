@@ -16,9 +16,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.webkit.WebViewCompat
 import com.example.mytube.adblock.UblockScriptlets
-import org.json.JSONObject
-import java.net.HttpURLConnection
-import java.net.URL
+import java.io.ByteArrayInputStream
 
 
 class WebViewManager {
@@ -103,9 +101,7 @@ class WebViewManager {
 
                 override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
                     val url = request.url.toString()
-                    if (url.contains("/youtubei/v1/")) {
-                        return interceptYoutubeApi(request)
-                    }
+                    blockAdDomain(url)?.let { return it }
                     return shouldIntercept?.invoke(url)
                 }
 
@@ -146,79 +142,24 @@ class WebViewManager {
         webView = wv
     }
 
-    private fun interceptYoutubeApi(request: WebResourceRequest): WebResourceResponse? {
-        return try {
-            val conn = URL(request.url.toString()).openConnection() as HttpURLConnection
-            conn.requestMethod = request.method
-            conn.connectTimeout = 10000
-            conn.readTimeout = 15000
-            for ((k, v) in request.requestHeaders) {
-                if (k.equals("Host", ignoreCase = true)) continue
-                conn.setRequestProperty(k, v)
-            }
-            conn.setRequestProperty("User-Agent", webView?.settings?.userAgentString ?: "Mozilla/5.0")
-            val cookies = android.webkit.CookieManager.getInstance().getCookie(request.url.toString())
-            if (cookies != null) conn.setRequestProperty("Cookie", cookies)
-            if (request.method.equals("POST", ignoreCase = true)) {
-                val body = try {
-                    val m = android.webkit.WebResourceRequest::class.java.getMethod("getRequestBody")
-                    m.invoke(request) as? java.io.InputStream
-                } catch (_: Exception) { null }
-                if (body != null) {
-                    conn.doOutput = true
-                    body.copyTo(conn.outputStream)
-                }
-            }
-            val statusCode = conn.responseCode
-            val body = conn.inputStream.bufferedReader().use { it.readText() }
-            val ct = conn.contentType ?: "application/json"
-            val mime = ct.split(";").firstOrNull()?.trim() ?: "application/json"
-            val encoding = "utf-8"
-            val stripped = stripAdFields(body)
-            val respHeaders = conn.headerFields
-                ?.filterKeys { it != null }
-                ?.mapKeys { it.key!! }
-                ?.mapValues { it.value.joinToString(", ") }
-                ?: emptyMap()
-            WebResourceResponse(mime, encoding, statusCode, "OK", respHeaders, stripped.byteInputStream(Charsets.UTF_8))
-        } catch (e: Exception) {
-            android.util.Log.w(TAG, "Youtube API intercept failed: ${e.message}")
-            null
-        }
-    }
-
     companion object {
         private const val TAG = "WebViewManager"
-        private val AD_KEYS = listOf("playerAds", "adPlacements", "adSlots", "adBreak", "adBreaks")
+        private val AD_DOMAINS = listOf(
+            "doubleclick.net",
+            "googlesyndication.com",
+            "googleadservices.com",
+            "adservice.google.com",
+            "pagead2.googlesyndication.com"
+        )
     }
 
-    private fun stripAdFields(json: String): String {
-        return try {
-            val obj = JSONObject(json)
-            var changed = false
-            for (key in AD_KEYS) {
-                if (obj.has(key)) {
-                    obj.remove(key)
-                    changed = true
-                }
-            }
-            if (obj.has("playerResponse")) {
-                val pr = obj.opt("playerResponse")
-                if (pr is JSONObject) {
-                    for (key in AD_KEYS) {
-                        if (pr.has(key)) {
-                            pr.remove(key)
-                            changed = true
-                        }
-                    }
-                    if (changed) obj.put("playerResponse", pr)
-                }
-            }
-            if (changed) obj.toString() else json
-        } catch (e: Exception) {
-            android.util.Log.w(TAG, "stripAdFields failed: ${e.message}")
-            json
+    private fun blockAdDomain(url: String): WebResourceResponse? {
+        val host = kotlin.runCatching { java.net.URI(url).host }.getOrNull() ?: return null
+        if (AD_DOMAINS.any { host.contains(it, ignoreCase = true) }) {
+            android.util.Log.d(TAG, "Blocked ad domain: $url")
+            return WebResourceResponse("text/plain", "utf-8", 204, "No Content", emptyMap(), ByteArrayInputStream(ByteArray(0)))
         }
+        return null
     }
 
     fun loadUrl(url: String) {

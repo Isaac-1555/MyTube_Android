@@ -48,8 +48,8 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             injectScripts()
             injectCosmeticCss(url)
         }
-        // No network blocking — YouTube detects empty responses.
-        // Scriptlet strips ad fields from API responses client-side instead.
+        // Ad domain blocking in WebViewManager.shouldInterceptRequest.
+        // Scriptlet handles ad stripping + YouTube internal config disabling.
         webViewManager.shouldIntercept = { null }
     }
 
