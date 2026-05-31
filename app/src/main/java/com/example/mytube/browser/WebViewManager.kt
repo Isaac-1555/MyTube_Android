@@ -2,6 +2,8 @@ package com.example.mytube.browser
 
 import android.graphics.Bitmap
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.view.ViewGroup
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
@@ -249,8 +251,10 @@ class WebViewManager {
         webView?.evaluateJavascript(script, null)
     }
 
+    private val mainHandler = Handler(Looper.getMainLooper())
+
     fun evaluateJsFromMainThread(script: String) {
-        webView?.post { webView?.evaluateJavascript(script, null) }
+        mainHandler.post { webView?.evaluateJavascript(script, null) }
     }
 
     fun destroy() {

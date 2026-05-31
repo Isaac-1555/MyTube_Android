@@ -1,7 +1,6 @@
 package com.example.mytube
 
 import android.app.PictureInPictureParams
-import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import android.util.Rational
@@ -62,20 +61,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    override fun onStart() {
-        super.onStart()
-        browserViewModel.playbackManager.stopBackgroundPlayback()
-    }
-
-    override fun onStop() {
-        super.onStop()
-        if (!isInPictureInPictureMode && 
-            browserViewModel.bgPlaybackEnabled.value && 
-            browserViewModel.playbackManager.isPlaying) {
-            browserViewModel.playbackManager.startBackgroundPlayback()
-        }
-    }
-
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
         if (browserViewModel.autoPipEnabled.value) {
@@ -89,18 +74,6 @@ class MainActivity : ComponentActivity() {
                 .setAspectRatio(Rational(Constants.PIP_RATIO_WIDTH, Constants.PIP_RATIO_HEIGHT))
                 .build()
             enterPictureInPictureMode(params)
-        }
-    }
-
-    override fun onPictureInPictureModeChanged(
-        isInPictureInPictureMode: Boolean,
-        newConfig: Configuration
-    ) {
-        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
-        if (isInPictureInPictureMode) {
-            browserViewModel.playbackManager.startService()
-        } else {
-            browserViewModel.playbackManager.stopService()
         }
     }
 }

@@ -37,6 +37,11 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         playbackManager.jsEvaluator = { webViewManager.evaluateJsFromMainThread(it) }
         webViewManager.onPlaybackUpdate = { playing, title, duration, position ->
             playbackManager.updateMetadata(playing, title, duration, position)
+            if (playing && bgPlaybackEnabled.value) {
+                playbackManager.startService()
+            } else if (!playing) {
+                playbackManager.stopService()
+            }
         }
 
         webViewManager.onPageLoaded = { url, _ ->

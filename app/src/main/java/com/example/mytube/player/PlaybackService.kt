@@ -9,7 +9,9 @@ import android.content.IntentFilter
 import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.os.PowerManager
 import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.MediaSessionCompat
@@ -27,6 +29,13 @@ class PlaybackService : Service() {
     private var audioFocusRequest: AudioFocusRequest? = null
     private var isPlaying = false
     private var currentTitle = "MyTube"
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val keepAliveRunnable = object : Runnable {
+        override fun run() {
+            evaluateJs("window.MyTubeBgTick && window.MyTubeBgTick()")
+            mainHandler.postDelayed(this, 1000)
+        }
+    }
 
     private val noisyReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -67,15 +76,20 @@ class PlaybackService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_START -> {
+                isPlaying = true
                 requestAudioFocus()
                 if (wakeLock?.isHeld == false) wakeLock?.acquire(10 * 60 * 1000L /*10 minutes*/)
                 startWithNotification()
+                mainHandler.removeCallbacks(keepAliveRunnable)
+                mainHandler.post(keepAliveRunnable)
             }
             ACTION_PLAY -> {
                 isPlaying = true
                 evaluateJs("window.MyTubePlay && window.MyTubePlay()")
                 updatePlaybackState(true)
                 startWithNotification()
+                mainHandler.removeCallbacks(keepAliveRunnable)
+                mainHandler.post(keepAliveRunnable)
             }
             ACTION_PAUSE -> {
                 isPlaying = false
@@ -194,6 +208,7 @@ class PlaybackService : Service() {
     }
 
     private fun stop() {
+        mainHandler.removeCallbacks(keepAliveRunnable)
         mediaSession?.isActive = false
         if (wakeLock?.isHeld == true) wakeLock?.release()
         abandonAudioFocus()
@@ -202,6 +217,7 @@ class PlaybackService : Service() {
     }
 
     override fun onDestroy() {
+        mainHandler.removeCallbacks(keepAliveRunnable)
         unregisterReceiver(noisyReceiver)
         mediaSession?.release()
         if (wakeLock?.isHeld == true) wakeLock?.release()
@@ -211,11 +227,17 @@ class PlaybackService : Service() {
 
     private inner class MediaSessionCallback : MediaSessionCompat.Callback() {
         override fun onPause() {
+            isPlaying = false
             evaluateJs("window.MyTubePause && window.MyTubePause()")
+            updatePlaybackState(false)
         }
 
         override fun onPlay() {
+            isPlaying = true
             evaluateJs("window.MyTubePlay && window.MyTubePlay()")
+            updatePlaybackState(true)
+            mainHandler.removeCallbacks(keepAliveRunnable)
+            mainHandler.post(keepAliveRunnable)
         }
 
         override fun onStop() {
