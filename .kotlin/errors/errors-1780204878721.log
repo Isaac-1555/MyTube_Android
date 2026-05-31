@@ -1,0 +1,376 @@
+kotlin version: 2.2.10
+error message: java.lang.RuntimeException: Exception while generating code for:
+FUN name:interceptYoutubeApi visibility:private modality:FINAL returnType:android.webkit.WebResourceResponse?
+  VALUE_PARAMETER kind:DispatchReceiver name:<this> index:0 type:com.example.mytube.browser.WebViewManager
+  VALUE_PARAMETER kind:Regular name:request index:1 type:android.webkit.WebResourceRequest
+  BLOCK_BODY
+    RETURN type=kotlin.Nothing from='private final fun interceptYoutubeApi (request: android.webkit.WebResourceRequest): android.webkit.WebResourceResponse? declared in com.example.mytube.browser.WebViewManager'
+      TRY type=android.webkit.WebResourceResponse?
+        try: BLOCK type=android.webkit.WebResourceResponse origin=null
+          VAR name:conn type:java.net.HttpURLConnection [val]
+            BLOCK type=java.net.HttpURLConnection origin=null
+              VAR IR_TEMPORARY_VARIABLE name:tmp0 type:kotlin.Any? [val]
+                CALL 'public open fun openConnection (): @[FlexibleNullability] java.net.URLConnection? declared in java.net.URL' type=@[FlexibleNullability] java.net.URLConnection? origin=null
+                  ARG <this>: CONSTRUCTOR_CALL 'public constructor <init> (p0: @[FlexibleNullability] kotlin.String?) declared in java.net.URL' type=java.net.URL origin=null
+                    ARG p0: CALL 'public abstract fun toString (): @[EnhancedNullability] kotlin.String declared in android.net.Uri' type=@[EnhancedNullability] kotlin.String origin=null
+                      ARG <this>: CALL 'public abstract fun getUrl (): @[FlexibleNullability] android.net.Uri? declared in android.webkit.WebResourceRequest' type=@[FlexibleNullability] android.net.Uri? origin=GET_PROPERTY
+                        ARG <this>: GET_VAR 'request: android.webkit.WebResourceRequest declared in com.example.mytube.browser.WebViewManager.interceptYoutubeApi' type=android.webkit.WebResourceRequest origin=null
+              CALL 'public final fun checkNotNull (object: kotlin.Any?, message: kotlin.String): kotlin.Unit declared in kotlin.jvm.internal.Intrinsics' type=kotlin.Unit origin=null
+                ARG object: GET_VAR 'val tmp0: kotlin.Any? [val] declared in com.example.mytube.browser.WebViewManager.interceptYoutubeApi' type=kotlin.Any? origin=null
+                ARG message: CONST String type=kotlin.String value="null cannot be cast to non-null type java.net.HttpURLConnection"
+              TYPE_OP type=java.net.HttpURLConnection? origin=CAST typeOperand=java.net.HttpURLConnection?
+                GET_VAR 'val tmp0: kotlin.Any? [val] declared in com.example.mytube.browser.WebViewManager.interceptYoutubeApi' type=kotlin.Any? origin=null
+          CALL 'public open fun setRequestMethod (p0: @[FlexibleNullability] kotlin.String?): kotlin.Unit declared in java.net.HttpURLConnection' type=kotlin.Unit origin=EQ
+            ARG <this>: GET_VAR 'val conn: java.net.HttpURLConnection [val] declared in com.example.mytube.browser.WebViewManager.interceptYoutubeApi' type=java.net.HttpURLConnection origin=null
+            ARG p0: CALL 'public abstract fun getMethod (): @[FlexibleNullability] kotlin.String? declared in android.webkit.WebResourceRequest' type=@[FlexibleNullability] kotlin.String? origin=GET_PROPERTY
+              ARG <this>: GET_VAR 'request: android.webkit.WebResourceRequest declared in com.example.mytube.browser.WebViewManager.interceptYoutubeApi' type=android.webkit.WebResourceRequest origin=null
+          CALL 'public open fun setRequestProperty (p0: @[FlexibleNullability] kotlin.String?, p1: @[FlexibleNullability] kotlin.String?): kotlin.Unit [fake_override] declared in java.net.HttpURLConnection' type=kotlin.Unit origin=null
+            ARG <this>: GET_VAR 'val conn: java.net.HttpURLConnection [val] declared in com.example.mytube.browser.WebViewManager.interceptYoutubeApi' type=java.net.HttpURLConnection origin=null
+            ARG p0: CONST String type=kotlin.String value="User-Agent"
+            ARG p1: CONST String type=kotlin.String value="Mozilla/5.0"
+          BLOCK type=kotlin.Unit origin=FOR_LOOP
+            VAR FOR_LOOP_ITERATOR name:<iterator> type:kotlin.collections.MutableIterator<kotlin.collections.MutableMap.MutableEntry<@[FlexibleNullability] kotlin.String?, @[FlexibleNullability] kotlin.String?>> [val]
+              CALL 'public final fun iterator <K, V> (<this>: kotlin.collections.MutableMap<K of kotlin.collections.MapsKt.iterator, V of kotlin.collections.MapsKt.iterator>): kotlin.collections.MutableIterator<kotlin.collections.MutableMap.MutableEntry<K of kotlin.collections.MapsKt.iterator, V of kotlin.collections.MapsKt.iterator>> [inline,operator] declared in kotlin.collections.MapsKt' type=kotlin.collections.MutableIterator<kotlin.collections.MutableMap.MutableEntry<@[FlexibleNullability] kotlin.String?, @[FlexibleNullability] kotlin.String?>> origin=FOR_LOOP_ITERATOR
+                TYPE_ARG K: @[FlexibleNullability] kotlin.String?
+                TYPE_ARG V: @[FlexibleNullability] kotlin.String?
+                ARG <this>: BLOCK type=@[FlexibleMutability] kotlin.collections.MutableMap<@[FlexibleNullability] kotlin.String?, @[FlexibleNullability] kotlin.String?> origin=null
+                  VAR IR_TEMPORARY_VARIABLE name:tmp1 type:kotlin.Any? [val]
+                    CALL 'public abstract fun getRequestHeaders (): @[FlexibleNullability] @[FlexibleMutability] kotlin.collections.MutableMap<@[FlexibleNullability] kotlin.String?, @[FlexibleNullability] kotlin.String?>? declared in android.webkit.WebResourceRequest' type=@[FlexibleNullability] @[FlexibleMutability] kotlin.collections.MutableMap<@[FlexibleNullability] kotlin.String?, @[FlexibleNullability] kotlin.String?>? origin=GET_PROPERTY
+                      ARG <this>: GET_VAR 'request: android.webkit.WebResourceRequest declared in com.example.mytube.browser.WebViewManager.interceptYoutubeApi' type=android.webkit.WebResourceRequest origin=null
+                  CALL 'public final fun checkNotNullExpressionValue (value: kotlin.Any?, expression: kotlin.String): kotlin.Unit declared in kotlin.jvm.internal.Intrinsics' type=kotlin.Unit origin=null
+                    ARG value: GET_VAR 'val tmp1: kotlin.Any? [val] declared in com.example.mytube.browser.WebViewManager.interceptYoutubeApi' type=kotlin.Any? origin=null
+                    ARG expression: CONST String type=kotlin.String value="getRequestHeaders(...)"
+                  GET_VAR 'val tmp1: kotlin.Any? [val] declared in com.example.mytube.browser.WebViewManager.interceptYoutubeApi' type=kotlin.Any? origin=null
+            WHILE label=WebViewManager$interceptYoutubeApi1 origin=FOR_LOOP_INNER_WHILE
+              condition: CALL 'public abstract fun hasNext (): kotlin.Boolean [fake_override,operator] declared in kotlin.collections.MutableIterator' type=kotlin.Boolean origin=FOR_LOOP_HAS_NEXT
+                ARG <this>: GET_VAR 'val <iterator>: kotlin.collections.MutableIterator<kotlin.collections.MutableMap.MutableEntry<@[FlexibleNullability] kotlin.String?, @[FlexibleNullability] kotlin.String?>> [val] declared in com.example.mytube.browser.WebViewManager.interceptYoutubeApi' type=kotlin.collections.MutableIterator<kotlin.collections.MutableMap.MutableEntry<@[FlexibleNullability] kotlin.String?, @[FlexibleNullability] kotlin.String?>> origin=null
+              body: BLOCK type=kotlin.Unit origin=FOR_LOOP_INNER_WHILE
+                VAR IR_TEMPORARY_VARIABLE name:<destruct> type:kotlin.collections.MutableMap.MutableEntry<@[FlexibleNullability] kotlin.String?, @[FlexibleNullability] kotlin.String?> [val]
+                  CALL 'public abstract fun next (): T of kotlin.collections.MutableIterator [fake_override,operator] declared in kotlin.collections.MutableIterator' type=kotlin.collections.MutableMap.MutableEntry<@[FlexibleNullability] kotlin.String?, @[FlexibleNullability] kotlin.String?> origin=FOR_LOOP_NEXT
+                    ARG <this>: GET_VAR 'val <iterator>: kotlin.collections.MutableIterator<kotlin.collections.MutableMap.MutableEntry<@[FlexibleNullability] kotlin.String?, @[FlexibleNullability] kotlin.String?>> [val] declared in com.example.mytube.browser.WebViewManager.interceptYoutubeApi' type=kotlin.collections.MutableIterator<kotlin.collections.MutableMap.MutableEntry<@[FlexibleNullability] kotlin.String?, @[FlexibleNullability] kotlin.String?>> origin=null
+                VAR name:k type:@[FlexibleNullability] kotlin.String? [val]
+                  CALL 'public final fun component1 <K, V> (<this>: kotlin.collections.Map.Entry<K of kotlin.collections.MapsKt.component1, V of kotlin.collections.MapsKt.component1>): K of kotlin.collections.MapsKt.component1 [inline,operator] declared in kotlin.collections.MapsKt' type=@[FlexibleNullability] kotlin.String? origin=COMPONENT_N(index=1)
+                    TYPE_ARG K: @[FlexibleNullability] kotlin.String?
+                    TYPE_ARG V: @[FlexibleNullability] kotlin.String?
+                    ARG <this>: GET_VAR 'val <destruct>: kotlin.collections.MutableMap.MutableEntry<@[FlexibleNullability] kotlin.String?, @[FlexibleNullability] kotlin.String?> [val] declared in com.example.mytube.browser.WebViewManager.interceptYoutubeApi' type=kotlin.collections.MutableMap.MutableEntry<@[FlexibleNullability] kotlin.String?, @[FlexibleNullability] kotlin.String?> origin=null
+                VAR name:v type:@[FlexibleNullability] kotlin.String? [val]
+                  CALL 'public final fun component2 <K, V> (<this>: kotlin.collections.Map.Entry<K of kotlin.collections.MapsKt.component2, V of kotlin.collections.MapsKt.component2>): V of kotlin.collections.MapsKt.component2 [inline,operator] declared in kotlin.collections.MapsKt' type=@[FlexibleNullability] kotlin.String? origin=COMPONENT_N(index=2)
+                    TYPE_ARG K: @[FlexibleNullability] kotlin.String?
+                    TYPE_ARG V: @[FlexibleNullability] kotlin.String?
+                    ARG <this>: GET_VAR 'val <destruct>: kotlin.collections.MutableMap.MutableEntry<@[FlexibleNullability] kotlin.String?, @[FlexibleNullability] kotlin.String?> [val] declared in com.example.mytube.browser.WebViewManager.interceptYoutubeApi' type=kotlin.collections.MutableMap.MutableEntry<@[FlexibleNullability] kotlin.String?, @[FlexibleNullability] kotlin.String?> origin=null
+                BLOCK type=kotlin.Unit origin=null
+                  CALL 'public open fun setRequestProperty (p0: @[FlexibleNullability] kotlin.String?, p1: @[FlexibleNullability] kotlin.String?): kotlin.Unit [fake_override] declared in java.net.HttpURLConnection' type=kotlin.Unit origin=null
+                    ARG <this>: GET_VAR 'val conn: java.net.HttpURLConnection [val] declared in com.example.mytube.browser.WebViewManager.interceptYoutubeApi' type=java.net.HttpURLConnection origin=null
+                    ARG p0: GET_VAR 'val k: @[FlexibleNullability] kotlin.String? [val] declared in com.example.mytube.browser.WebViewManager.interceptYoutubeApi' type=@[FlexibleNullability] kotlin.String? origin=null
+                    ARG p1: GET_VAR 'val v: @[FlexibleNullability] kotlin.String? [val] declared in com.example.mytube.browser.WebViewManager.interceptYoutubeApi' type=@[FlexibleNullability] kotlin.String? origin=null
+          WHEN type=kotlin.Unit origin=IF
+            BRANCH
+              if: CALL 'public final fun equals (<this>: kotlin.String?, other: kotlin.String?, ignoreCase: kotlin.Boolean): kotlin.Boolean declared in kotlin.text.StringsKt' type=kotlin.Boolean origin=null
+                ARG <this>: CALL 'public abstract fun getMethod (): @[FlexibleNullability] kotlin.String? declared in android.webkit.WebResourceRequest' type=@[FlexibleNullability] kotlin.String? origin=GET_PROPERTY
+                  ARG <this>: GET_VAR 'request: android.webkit.WebResourceRequest declared in com.example.mytube.browser.WebViewManager.interceptYoutubeApi' type=android.webkit.WebResourceRequest origin=null
+                ARG other: CONST String type=kotlin.String value="POST"
+                ARG ignoreCase: CONST Boolean type=kotlin.Boolean value=true
+              then: COMPOSITE type=kotlin.Unit origin=null
+                BLOCK type=kotlin.Long? origin=null
+                  VAR name:body type:java.io.InputStream? [val]
+                    WHEN type=java.io.InputStream? origin=IF
+                      BRANCH
+                        if: CALL 'public final fun greaterOrEqual (arg0: kotlin.Int, arg1: kotlin.Int): kotlin.Boolean declared in kotlin.internal.ir' type=kotlin.Boolean origin=GTEQ
+                          ARG arg0: GET_FIELD 'FIELD IR_EXTERNAL_JAVA_DECLARATION_STUB name:SDK_INT type:kotlin.Int visibility:public [final,static] declared in android.os.Build.VERSION' type=kotlin.Int superQualifierSymbol=android.os.Build.VERSION origin=null
+                          ARG arg1: CONST Int type=kotlin.Int value=33
+                        then: BLOCK type=IrErrorType([Error type: Unresolved type for requestBody]) origin=null
+                          ERROR_CALL 'Unresolved reference: <Unresolved name: requestBody>#' type=IrErrorType([Error type: Unresolved type for requestBody])
+                      BRANCH
+                        if: CONST Boolean type=kotlin.Boolean value=true
+                        then: CONST Null type=kotlin.Nothing? value=null
+                  BLOCK type=kotlin.Long? origin=FOLDED_SAFE_CALL
+                    WHEN type=kotlin.Long? origin=FOLDED_SAFE_CALL
+                      BRANCH
+                        if: COMPOSITE type=kotlin.Boolean origin=null
+                          CALL 'public final fun not (): kotlin.Boolean [operator] declared in kotlin.Boolean' type=kotlin.Boolean origin=null
+                            ARG <this>: CALL 'public final fun EQEQ (arg0: kotlin.Any?, arg1: kotlin.Any?): kotlin.Boolean declared in kotlin.internal.ir' type=kotlin.Boolean origin=null
+                              ARG arg0: GET_VAR 'val body: java.io.InputStream? [val] declared in com.example.mytube.browser.WebViewManager.interceptYoutubeApi' type=java.io.InputStream? origin=null
+                              ARG arg1: CONST Null type=kotlin.Nothing? value=null
+                        then: CALL 'public final fun let <T, R> (<this>: T of kotlin.StandardKt.let, block: kotlin.Function1<T of kotlin.StandardKt.let, R of kotlin.StandardKt.let>): R of kotlin.StandardKt.let [inline] declared in kotlin.StandardKt' type=kotlin.Long origin=null
+                          TYPE_ARG T: java.io.InputStream
+                          TYPE_ARG R: kotlin.Long
+                          ARG <this>: GET_VAR 'val body: java.io.InputStream? [val] declared in com.example.mytube.browser.WebViewManager.interceptYoutubeApi' type=java.io.InputStream? origin=null
+                          ARG block: BLOCK type=kotlin.Function1<java.io.InputStream, kotlin.Long> origin=LAMBDA
+                            COMPOSITE type=kotlin.Unit origin=null
+                            FUNCTION_REFERENCE 'private final fun interceptYoutubeApi$lambda$2 ($conn: java.net.HttpURLConnection, it: java.io.InputStream): kotlin.Long declared in com.example.mytube.browser.WebViewManager' type=kotlin.Function1<java.io.InputStream, kotlin.Long> origin=INLINE_LAMBDA reflectionTarget=null
+                              ARG $conn: GET_VAR 'val conn: java.net.HttpURLConnection [val] declared in com.example.mytube.browser.WebViewManager.interceptYoutubeApi' type=java.net.HttpURLConnection origin=null
+                      BRANCH
+                        if: CONST Boolean type=kotlin.Boolean value=true
+                        then: CONST Null type=kotlin.Nothing? value=null
+                COMPOSITE type=kotlin.Unit origin=null
+          VAR name:statusCode type:kotlin.Int [val]
+            CALL 'public open fun getResponseCode (): kotlin.Int declared in java.net.HttpURLConnection' type=kotlin.Int origin=GET_PROPERTY
+              ARG <this>: GET_VAR 'val conn: java.net.HttpURLConnection [val] declared in com.example.mytube.browser.WebViewManager.interceptYoutubeApi' type=java.net.HttpURLConnection origin=null
+          VAR name:body type:kotlin.String [val]
+            CALL 'public final fun use <T, R> (<this>: T of kotlin.io.CloseableKt.use, block: kotlin.Function1<T of kotlin.io.CloseableKt.use, R of kotlin.io.CloseableKt.use>): R of kotlin.io.CloseableKt.use [inline] declared in kotlin.io.CloseableKt' type=kotlin.String origin=null
+              TYPE_ARG T: java.io.BufferedReader
+              TYPE_ARG R: kotlin.String
+              ARG <this>: CALL 'public/*package*/ final fun bufferedReader$default (<this>: java.io.InputStream, charset: java.nio.charset.Charset?, $mask0: kotlin.Int, $handler: kotlin.Any?): java.io.BufferedReader [inline] declared in kotlin.io.ByteStreamsKt' type=java.io.BufferedReader origin=DEFAULT_DISPATCH_CALL
+                ARG <this>: BLOCK type=java.io.InputStream origin=null
+                  VAR IR_TEMPORARY_VARIABLE name:tmp2 type:kotlin.Any? [val]
+                    CALL 'public open fun getInputStream (): @[FlexibleNullability] java.io.InputStream? [fake_override] declared in java.net.HttpURLConnection' type=@[FlexibleNullability] java.io.InputStream? origin=GET_PROPERTY
+                      ARG <this>: GET_VAR 'val conn: java.net.HttpURLConnection [val] declared in com.example.mytube.browser.WebViewManager.interceptYoutubeApi' type=java.net.HttpURLConnection origin=null
+                  CALL 'public final fun checkNotNullExpressionValue (value: kotlin.Any?, expression: kotlin.String): kotlin.Unit declared in kotlin.jvm.internal.Intrinsics' type=kotlin.Unit origin=null
+                    ARG value: GET_VAR 'val tmp2: kotlin.Any? [val] declared in com.example.mytube.browser.WebViewManager.interceptYoutubeApi' type=kotlin.Any? origin=null
+                    ARG expression: CONST String type=kotlin.String value="getInputStream(...)"
+                  GET_VAR 'val tmp2: kotlin.Any? [val] declared in com.example.mytube.browser.WebViewManager.interceptYoutubeApi' type=kotlin.Any? origin=null
+                ARG charset: COMPOSITE type=java.nio.charset.Charset? origin=DEFAULT_VALUE
+                  CONST Null type=java.nio.charset.Charset? value=null
+                ARG $mask0: CONST Int type=kotlin.Int value=1
+                ARG $handler: CONST Null type=kotlin.Any? value=null
+              ARG block: BLOCK type=kotlin.Function1<java.io.BufferedReader, kotlin.String> origin=LAMBDA
+                COMPOSITE type=kotlin.Unit origin=null
+                FUNCTION_REFERENCE 'private final fun interceptYoutubeApi$lambda$3 (it: java.io.BufferedReader): kotlin.String declared in com.example.mytube.browser.WebViewManager' type=kotlin.Function1<java.io.BufferedReader, kotlin.String> origin=INLINE_LAMBDA reflectionTarget=null
+          VAR name:ct type:kotlin.String [val]
+            BLOCK type=kotlin.String origin=FOLDED_ELVIS
+              WHEN type=kotlin.String origin=FOLDED_ELVIS
+                BRANCH
+                  if: COMPOSITE type=kotlin.Boolean origin=null
+                    VAR IR_TEMPORARY_VARIABLE name:tmp1_elvis_lhs type:@[FlexibleNullability] kotlin.String? [val]
+                      CALL 'public open fun getContentType (): @[FlexibleNullability] kotlin.String? [fake_override] declared in java.net.HttpURLConnection' type=@[FlexibleNullability] kotlin.String? origin=GET_PROPERTY
+                        ARG <this>: GET_VAR 'val conn: java.net.HttpURLConnection [val] declared in com.example.mytube.browser.WebViewManager.interceptYoutubeApi' type=java.net.HttpURLConnection origin=null
+                    CALL 'public final fun not (): kotlin.Boolean [operator] declared in kotlin.Boolean' type=kotlin.Boolean origin=null
+                      ARG <this>: CALL 'public final fun EQEQ (arg0: kotlin.Any?, arg1: kotlin.Any?): kotlin.Boolean declared in kotlin.internal.ir' type=kotlin.Boolean origin=null
+                        ARG arg0: GET_VAR 'val tmp1_elvis_lhs: @[FlexibleNullability] kotlin.String? [val] declared in com.example.mytube.browser.WebViewManager.interceptYoutubeApi' type=@[FlexibleNullability] kotlin.String? origin=null
+                        ARG arg1: CONST Null type=kotlin.Nothing? value=null
+                  then: GET_VAR 'val tmp1_elvis_lhs: @[FlexibleNullability] kotlin.String? [val] declared in com.example.mytube.browser.WebViewManager.interceptYoutubeApi' type=@[FlexibleNullability] kotlin.String? origin=null
+                BRANCH
+                  if: CONST Boolean type=kotlin.Boolean value=true
+                  then: CONST String type=kotlin.String value="application/json"
+          VAR name:mime type:kotlin.String [val]
+            BLOCK type=kotlin.String origin=FOLDED_ELVIS
+              WHEN type=kotlin.String origin=FOLDED_ELVIS
+                BRANCH
+                  if: CALL 'public final fun ANDAND (arg0: kotlin.Boolean, arg1: kotlin.Boolean): kotlin.Boolean declared in kotlin.internal.ir' type=kotlin.Boolean origin=null
+                    ARG arg0: COMPOSITE type=kotlin.Boolean origin=null
+                      VAR IR_TEMPORARY_VARIABLE name:tmp2_safe_receiver type:kotlin.String? [val]
+                        CALL 'public final fun firstOrNull <T> (<this>: kotlin.collections.List<T of kotlin.collections.CollectionsKt.firstOrNull>): T of kotlin.collections.CollectionsKt.firstOrNull? declared in kotlin.collections.CollectionsKt' type=kotlin.String? origin=null
+                          TYPE_ARG T: kotlin.String
+                          ARG <this>: CALL 'public final fun split$default (<this>: kotlin.CharSequence, vararg delimiters: kotlin.String, ignoreCase: kotlin.Boolean, limit: kotlin.Int, $mask0: kotlin.Int, $handler: kotlin.Any?): kotlin.collections.List<kotlin.String> declared in kotlin.text.StringsKt' type=kotlin.collections.List<kotlin.String> origin=DEFAULT_DISPATCH_CALL
+                            ARG <this>: GET_VAR 'val ct: kotlin.String [val] declared in com.example.mytube.browser.WebViewManager.interceptYoutubeApi' type=kotlin.String origin=null
+                            ARG delimiters: BLOCK type=kotlin.Array<out kotlin.String> origin=null
+                              VAR IR_TEMPORARY_VARIABLE name:tmp0 type:kotlin.Array<out kotlin.String> [val]
+                                CALL 'public final fun arrayOfNulls <T> (size: kotlin.Int): kotlin.Array<T of kotlin.arrayOfNulls?> declared in kotlin' type=kotlin.Array<out kotlin.String> origin=null
+                                  TYPE_ARG T: kotlin.String
+                                  ARG size: CONST Int type=kotlin.Int value=1
+                              CALL 'public final fun set (index: kotlin.Int, value: T of kotlin.Array): kotlin.Unit [operator] declared in kotlin.Array' type=kotlin.Unit origin=null
+                                ARG <this>: GET_VAR 'val tmp0: kotlin.Array<out kotlin.String> [val] declared in com.example.mytube.browser.WebViewManager.interceptYoutubeApi' type=kotlin.Array<out kotlin.String> origin=null
+                                ARG index: CONST Int type=kotlin.Int value=0
+                                ARG value: CONST String type=kotlin.String value=";"
+                              GET_VAR 'val tmp0: kotlin.Array<out kotlin.String> [val] declared in com.example.mytube.browser.WebViewManager.interceptYoutubeApi' type=kotlin.Array<out kotlin.String> origin=null
+                            ARG ignoreCase: COMPOSITE type=kotlin.Boolean origin=DEFAULT_VALUE
+                              CONST Boolean type=kotlin.Boolean value=false
+                            ARG limit: COMPOSITE type=kotlin.Int origin=DEFAULT_VALUE
+                              CONST Int type=kotlin.Int value=0
+                            ARG $mask0: CONST Int type=kotlin.Int value=6
+                            ARG $handler: CONST Null type=kotlin.Any? value=null
+                      CALL 'public final fun not (): kotlin.Boolean [operator] declared in kotlin.Boolean' type=kotlin.Boolean origin=null
+                        ARG <this>: CALL 'public final fun EQEQ (arg0: kotlin.Any?, arg1: kotlin.Any?): kotlin.Boolean declared in kotlin.internal.ir' type=kotlin.Boolean origin=null
+                          ARG arg0: GET_VAR 'val tmp2_safe_receiver: kotlin.String? [val] declared in com.example.mytube.browser.WebViewManager.interceptYoutubeApi' type=kotlin.String? origin=null
+                          ARG arg1: CONST Null type=kotlin.Nothing? value=null
+                    ARG arg1: COMPOSITE type=kotlin.Boolean origin=null
+                      VAR IR_TEMPORARY_VARIABLE name:tmp3_elvis_lhs type:kotlin.String [val]
+                        CALL 'public final fun trim (<this>: kotlin.String): kotlin.String [inline] declared in kotlin.text.StringsKt' type=kotlin.String origin=null
+                          ARG <this>: GET_VAR 'val tmp2_safe_receiver: kotlin.String? [val] declared in com.example.mytube.browser.WebViewManager.interceptYoutubeApi' type=kotlin.String? origin=null
+                      CALL 'public final fun not (): kotlin.Boolean [operator] declared in kotlin.Boolean' type=kotlin.Boolean origin=null
+                        ARG <this>: CALL 'public final fun EQEQ (arg0: kotlin.Any?, arg1: kotlin.Any?): kotlin.Boolean declared in kotlin.internal.ir' type=kotlin.Boolean origin=null
+                          ARG arg0: GET_VAR 'val tmp3_elvis_lhs: kotlin.String [val] declared in com.example.mytube.browser.WebViewManager.interceptYoutubeApi' type=kotlin.String origin=null
+                          ARG arg1: CONST Null type=kotlin.Nothing? value=null
+                  then: GET_VAR 'val tmp3_elvis_lhs: kotlin.String [val] declared in com.example.mytube.browser.WebViewManager.interceptYoutubeApi' type=kotlin.String origin=null
+                BRANCH
+                  if: CONST Boolean type=kotlin.Boolean value=true
+                  then: CONST String type=kotlin.String value="application/json"
+          VAR name:encoding type:kotlin.String [val]
+            CONST String type=kotlin.String value="utf-8"
+          VAR name:stripped type:kotlin.String [val]
+            CALL 'private final fun stripAdFields (json: kotlin.String): kotlin.String declared in com.example.mytube.browser.WebViewManager' type=kotlin.String origin=null
+              ARG <this>: GET_VAR '<this>: com.example.mytube.browser.WebViewManager declared in com.example.mytube.browser.WebViewManager.interceptYoutubeApi' type=com.example.mytube.browser.WebViewManager origin=IMPLICIT_ARGUMENT
+              ARG json: GET_VAR 'val body: kotlin.String [val] declared in com.example.mytube.browser.WebViewManager.interceptYoutubeApi' type=kotlin.String origin=null
+          VAR name:respHeaders type:kotlin.collections.Map<kotlin.String, kotlin.String> [val]
+            BLOCK type=kotlin.collections.Map<kotlin.String, kotlin.String> origin=FOLDED_ELVIS
+              WHEN type=kotlin.collections.Map<kotlin.String, kotlin.String> origin=FOLDED_ELVIS
+                BRANCH
+                  if: CALL 'public final fun ANDAND (arg0: kotlin.Boolean, arg1: kotlin.Boolean): kotlin.Boolean declared in kotlin.internal.ir' type=kotlin.Boolean origin=null
+                    ARG arg0: CALL 'public final fun ANDAND (arg0: kotlin.Boolean, arg1: kotlin.Boolean): kotlin.Boolean declared in kotlin.internal.ir' type=kotlin.Boolean origin=null
+                      ARG arg0: CALL 'public final fun ANDAND (arg0: kotlin.Boolean, arg1: kotlin.Boolean): kotlin.Boolean declared in kotlin.internal.ir' type=kotlin.Boolean origin=null
+                        ARG arg0: COMPOSITE type=kotlin.Boolean origin=null
+                          VAR IR_TEMPORARY_VARIABLE name:tmp4_safe_receiver type:@[FlexibleNullability] @[FlexibleMutability] kotlin.collections.MutableMap<@[FlexibleNullability] kotlin.String?, @[FlexibleNullability] @[FlexibleMutability] kotlin.collections.MutableList<@[FlexibleNullability] kotlin.String?>?>? [val]
+                            CALL 'public open fun getHeaderFields (): @[FlexibleNullability] @[FlexibleMutability] kotlin.collections.MutableMap<@[FlexibleNullability] kotlin.String?, @[FlexibleNullability] @[FlexibleMutability] kotlin.collections.MutableList<@[FlexibleNullability] kotlin.String?>?>? [fake_override] declared in java.net.HttpURLConnection' type=@[FlexibleNullability] @[FlexibleMutability] kotlin.collections.MutableMap<@[FlexibleNullability] kotlin.String?, @[FlexibleNullability] @[FlexibleMutability] kotlin.collections.MutableList<@[FlexibleNullability] kotlin.String?>?>? origin=GET_PROPERTY
+                              ARG <this>: GET_VAR 'val conn: java.net.HttpURLConnection [val] declared in com.example.mytube.browser.WebViewManager.interceptYoutubeApi' type=java.net.HttpURLConnection origin=null
+                          CALL 'public final fun not (): kotlin.Boolean [operator] declared in kotlin.Boolean' type=kotlin.Boolean origin=null
+                            ARG <this>: CALL 'public final fun EQEQ (arg0: kotlin.Any?, arg1: kotlin.Any?): kotlin.Boolean declared in kotlin.internal.ir' type=kotlin.Boolean origin=null
+                              ARG arg0: GET_VAR 'val tmp4_safe_receiver: @[FlexibleNullability] @[FlexibleMutability] kotlin.collections.MutableMap<@[FlexibleNullability] kotlin.String?, @[FlexibleNullability] @[FlexibleMutability] kotlin.collections.MutableList<@[FlexibleNullability] kotlin.String?>?>? [val] declared in com.example.mytube.browser.WebViewManager.interceptYoutubeApi' type=@[FlexibleNullability] @[FlexibleMutability] kotlin.collections.MutableMap<@[FlexibleNullability] kotlin.String?, @[FlexibleNullability] @[FlexibleMutability] kotlin.collections.MutableList<@[FlexibleNullability] kotlin.String?>?>? origin=null
+                              ARG arg1: CONST Null type=kotlin.Nothing? value=null
+                        ARG arg1: COMPOSITE type=kotlin.Boolean origin=null
+                          VAR IR_TEMPORARY_VARIABLE name:tmp5_safe_receiver type:kotlin.collections.Map<@[FlexibleNullability] kotlin.String?, @[FlexibleNullability] @[FlexibleMutability] kotlin.collections.MutableList<@[FlexibleNullability] kotlin.String?>?> [val]
+                            CALL 'public final fun filterKeys <K, V> (<this>: kotlin.collections.Map<out K of kotlin.collections.MapsKt.filterKeys, V of kotlin.collections.MapsKt.filterKeys>, predicate: kotlin.Function1<K of kotlin.collections.MapsKt.filterKeys, kotlin.Boolean>): kotlin.collections.Map<K of kotlin.collections.MapsKt.filterKeys, V of kotlin.collections.MapsKt.filterKeys> [inline] declared in kotlin.collections.MapsKt' type=kotlin.collections.Map<@[FlexibleNullability] kotlin.String?, @[FlexibleNullability] @[FlexibleMutability] kotlin.collections.MutableList<@[FlexibleNullability] kotlin.String?>?> origin=null
+                              TYPE_ARG K: @[FlexibleNullability] kotlin.String?
+                              TYPE_ARG V: @[FlexibleNullability] @[FlexibleMutability] kotlin.collections.MutableList<@[FlexibleNullability] kotlin.String?>?
+                              ARG <this>: GET_VAR 'val tmp4_safe_receiver: @[FlexibleNullability] @[FlexibleMutability] kotlin.collections.MutableMap<@[FlexibleNullability] kotlin.String?, @[FlexibleNullability] @[FlexibleMutability] kotlin.collections.MutableList<@[FlexibleNullability] kotlin.String?>?>? [val] declared in com.example.mytube.browser.WebViewManager.interceptYoutubeApi' type=@[FlexibleNullability] @[FlexibleMutability] kotlin.collections.MutableMap<@[FlexibleNullability] kotlin.String?, @[FlexibleNullability] @[FlexibleMutability] kotlin.collections.MutableList<@[FlexibleNullability] kotlin.String?>?>? origin=null
+                              ARG predicate: BLOCK type=kotlin.Function1<@[FlexibleNullability] kotlin.String?, kotlin.Boolean> origin=LAMBDA
+                                COMPOSITE type=kotlin.Unit origin=null
+                                FUNCTION_REFERENCE 'private final fun interceptYoutubeApi$lambda$4 (it: @[FlexibleNullability] kotlin.String?): kotlin.Boolean declared in com.example.mytube.browser.WebViewManager' type=kotlin.Function1<@[FlexibleNullability] kotlin.String?, kotlin.Boolean> origin=INLINE_LAMBDA reflectionTarget=null
+                          CALL 'public final fun not (): kotlin.Boolean [operator] declared in kotlin.Boolean' type=kotlin.Boolean origin=null
+                            ARG <this>: CALL 'public final fun EQEQ (arg0: kotlin.Any?, arg1: kotlin.Any?): kotlin.Boolean declared in kotlin.internal.ir' type=kotlin.Boolean origin=null
+                              ARG arg0: GET_VAR 'val tmp5_safe_receiver: kotlin.collections.Map<@[FlexibleNullability] kotlin.String?, @[FlexibleNullability] @[FlexibleMutability] kotlin.collections.MutableList<@[FlexibleNullability] kotlin.String?>?> [val] declared in com.example.mytube.browser.WebViewManager.interceptYoutubeApi' type=kotlin.collections.Map<@[FlexibleNullability] kotlin.String?, @[FlexibleNullability] @[FlexibleMutability] kotlin.collections.MutableList<@[FlexibleNullability] kotlin.String?>?> origin=null
+                              ARG arg1: CONST Null type=kotlin.Nothing? value=null
+                      ARG arg1: COMPOSITE type=kotlin.Boolean origin=null
+                        VAR IR_TEMPORARY_VARIABLE name:tmp6_safe_receiver type:kotlin.collections.Map<kotlin.String, @[FlexibleNullability] @[FlexibleMutability] kotlin.collections.MutableList<@[FlexibleNullability] kotlin.String?>?> [val]
+                          CALL 'public final fun mapKeys <K, V, R> (<this>: kotlin.collections.Map<out K of kotlin.collections.MapsKt.mapKeys, V of kotlin.collections.MapsKt.mapKeys>, transform: kotlin.Function1<kotlin.collections.Map.Entry<K of kotlin.collections.MapsKt.mapKeys, V of kotlin.collections.MapsKt.mapKeys>, R of kotlin.collections.MapsKt.mapKeys>): kotlin.collections.Map<R of kotlin.collections.MapsKt.mapKeys, V of kotlin.collections.MapsKt.mapKeys> [inline] declared in kotlin.collections.MapsKt' type=kotlin.collections.Map<kotlin.String, @[FlexibleNullability] @[FlexibleMutability] kotlin.collections.MutableList<@[FlexibleNullability] kotlin.String?>?> origin=null
+                            TYPE_ARG K: @[FlexibleNullability] kotlin.String?
+                            TYPE_ARG V: @[FlexibleNullability] @[FlexibleMutability] kotlin.collections.MutableList<@[FlexibleNullability] kotlin.String?>?
+                            TYPE_ARG R: kotlin.String
+                            ARG <this>: GET_VAR 'val tmp5_safe_receiver: kotlin.collections.Map<@[FlexibleNullability] kotlin.String?, @[FlexibleNullability] @[FlexibleMutability] kotlin.collections.MutableList<@[FlexibleNullability] kotlin.String?>?> [val] declared in com.example.mytube.browser.WebViewManager.interceptYoutubeApi' type=kotlin.collections.Map<@[FlexibleNullability] kotlin.String?, @[FlexibleNullability] @[FlexibleMutability] kotlin.collections.MutableList<@[FlexibleNullability] kotlin.String?>?>? origin=null
+                            ARG transform: BLOCK type=kotlin.Function1<kotlin.collections.Map.Entry<@[FlexibleNullability] kotlin.String?, @[FlexibleNullability] @[FlexibleMutability] kotlin.collections.MutableList<@[FlexibleNullability] kotlin.String?>?>, kotlin.String> origin=LAMBDA
+                              COMPOSITE type=kotlin.Unit origin=null
+                              FUNCTION_REFERENCE 'private final fun interceptYoutubeApi$lambda$5 (it: kotlin.collections.Map.Entry<@[FlexibleNullability] kotlin.String?, @[FlexibleNullability] @[FlexibleMutability] kotlin.collections.MutableList<@[FlexibleNullability] kotlin.String?>?>): kotlin.String declared in com.example.mytube.browser.WebViewManager' type=kotlin.Function1<kotlin.collections.Map.Entry<@[FlexibleNullability] kotlin.String?, @[FlexibleNullability] @[FlexibleMutability] kotlin.collections.MutableList<@[FlexibleNullability] kotlin.String?>?>, kotlin.String> origin=INLINE_LAMBDA reflectionTarget=null
+                        CALL 'public final fun not (): kotlin.Boolean [operator] declared in kotlin.Boolean' type=kotlin.Boolean origin=null
+                          ARG <this>: CALL 'public final fun EQEQ (arg0: kotlin.Any?, arg1: kotlin.Any?): kotlin.Boolean declared in kotlin.internal.ir' type=kotlin.Boolean origin=null
+                            ARG arg0: GET_VAR 'val tmp6_safe_receiver: kotlin.collections.Map<kotlin.String, @[FlexibleNullability] @[FlexibleMutability] kotlin.collections.MutableList<@[FlexibleNullability] kotlin.String?>?> [val] declared in com.example.mytube.browser.WebViewManager.interceptYoutubeApi' type=kotlin.collections.Map<kotlin.String, @[FlexibleNullability] @[FlexibleMutability] kotlin.collections.MutableList<@[FlexibleNullability] kotlin.String?>?> origin=null
+                            ARG arg1: CONST Null type=kotlin.Nothing? value=null
+                    ARG arg1: COMPOSITE type=kotlin.Boolean origin=null
+                      VAR IR_TEMPORARY_VARIABLE name:tmp7_elvis_lhs type:kotlin.collections.Map<kotlin.String, kotlin.String> [val]
+                        CALL 'public final fun mapValues <K, V, R> (<this>: kotlin.collections.Map<out K of kotlin.collections.MapsKt.mapValues, V of kotlin.collections.MapsKt.mapValues>, transform: kotlin.Function1<kotlin.collections.Map.Entry<K of kotlin.collections.MapsKt.mapValues, V of kotlin.collections.MapsKt.mapValues>, R of kotlin.collections.MapsKt.mapValues>): kotlin.collections.Map<K of kotlin.collections.MapsKt.mapValues, R of kotlin.collections.MapsKt.mapValues> [inline] declared in kotlin.collections.MapsKt' type=kotlin.collections.Map<kotlin.String, kotlin.String> origin=null
+                          TYPE_ARG K: kotlin.String
+                          TYPE_ARG V: @[FlexibleNullability] @[FlexibleMutability] kotlin.collections.MutableList<@[FlexibleNullability] kotlin.String?>?
+                          TYPE_ARG R: kotlin.String
+                          ARG <this>: GET_VAR 'val tmp6_safe_receiver: kotlin.collections.Map<kotlin.String, @[FlexibleNullability] @[FlexibleMutability] kotlin.collections.MutableList<@[FlexibleNullability] kotlin.String?>?> [val] declared in com.example.mytube.browser.WebViewManager.interceptYoutubeApi' type=kotlin.collections.Map<kotlin.String, @[FlexibleNullability] @[FlexibleMutability] kotlin.collections.MutableList<@[FlexibleNullability] kotlin.String?>?>? origin=null
+                          ARG transform: BLOCK type=kotlin.Function1<kotlin.collections.Map.Entry<kotlin.String, @[FlexibleNullability] @[FlexibleMutability] kotlin.collections.MutableList<@[FlexibleNullability] kotlin.String?>?>, kotlin.String> origin=LAMBDA
+                            COMPOSITE type=kotlin.Unit origin=null
+                            FUNCTION_REFERENCE 'private final fun interceptYoutubeApi$lambda$6 (it: kotlin.collections.Map.Entry<kotlin.String, @[FlexibleNullability] @[FlexibleMutability] kotlin.collections.MutableList<@[FlexibleNullability] kotlin.String?>?>): kotlin.String declared in com.example.mytube.browser.WebViewManager' type=kotlin.Function1<kotlin.collections.Map.Entry<kotlin.String, @[FlexibleNullability] @[FlexibleMutability] kotlin.collections.MutableList<@[FlexibleNullability] kotlin.String?>?>, kotlin.String> origin=INLINE_LAMBDA reflectionTarget=null
+                      CALL 'public final fun not (): kotlin.Boolean [operator] declared in kotlin.Boolean' type=kotlin.Boolean origin=null
+                        ARG <this>: CALL 'public final fun EQEQ (arg0: kotlin.Any?, arg1: kotlin.Any?): kotlin.Boolean declared in kotlin.internal.ir' type=kotlin.Boolean origin=null
+                          ARG arg0: GET_VAR 'val tmp7_elvis_lhs: kotlin.collections.Map<kotlin.String, kotlin.String> [val] declared in com.example.mytube.browser.WebViewManager.interceptYoutubeApi' type=kotlin.collections.Map<kotlin.String, kotlin.String> origin=null
+                          ARG arg1: CONST Null type=kotlin.Nothing? value=null
+                  then: GET_VAR 'val tmp7_elvis_lhs: kotlin.collections.Map<kotlin.String, kotlin.String> [val] declared in com.example.mytube.browser.WebViewManager.interceptYoutubeApi' type=kotlin.collections.Map<kotlin.String, kotlin.String> origin=null
+                BRANCH
+                  if: CONST Boolean type=kotlin.Boolean value=true
+                  then: CALL 'public final fun emptyMap <K, V> (): kotlin.collections.Map<K of kotlin.collections.MapsKt.emptyMap, V of kotlin.collections.MapsKt.emptyMap> declared in kotlin.collections.MapsKt' type=kotlin.collections.Map<kotlin.String, kotlin.String> origin=null
+                    TYPE_ARG K: kotlin.String
+                    TYPE_ARG V: kotlin.String
+          CONSTRUCTOR_CALL 'public constructor <init> (p0: @[FlexibleNullability] kotlin.String?, p1: @[FlexibleNullability] kotlin.String?, p2: kotlin.Int, p3: @[EnhancedNullability] kotlin.String, p4: @[FlexibleNullability] @[FlexibleMutability] kotlin.collections.MutableMap<@[FlexibleNullability] kotlin.String?, @[FlexibleNullability] kotlin.String?>?, p5: @[FlexibleNullability] java.io.InputStream?) declared in android.webkit.WebResourceResponse' type=android.webkit.WebResourceResponse origin=null
+            ARG p0: GET_VAR 'val mime: kotlin.String [val] declared in com.example.mytube.browser.WebViewManager.interceptYoutubeApi' type=kotlin.String origin=null
+            ARG p1: GET_VAR 'val encoding: kotlin.String [val] declared in com.example.mytube.browser.WebViewManager.interceptYoutubeApi' type=kotlin.String origin=null
+            ARG p2: GET_VAR 'val statusCode: kotlin.Int [val] declared in com.example.mytube.browser.WebViewManager.interceptYoutubeApi' type=kotlin.Int origin=null
+            ARG p3: CONST String type=kotlin.String value="OK"
+            ARG p4: GET_VAR 'val respHeaders: kotlin.collections.Map<kotlin.String, kotlin.String> [val] declared in com.example.mytube.browser.WebViewManager.interceptYoutubeApi' type=kotlin.collections.Map<kotlin.String, kotlin.String> origin=null
+            ARG p5: CALL 'public final fun byteInputStream (<this>: kotlin.String, charset: java.nio.charset.Charset): java.io.ByteArrayInputStream [inline] declared in kotlin.io.ByteStreamsKt' type=java.io.ByteArrayInputStream origin=null
+              ARG <this>: GET_VAR 'val stripped: kotlin.String [val] declared in com.example.mytube.browser.WebViewManager.interceptYoutubeApi' type=kotlin.String origin=null
+              ARG charset: GET_FIELD 'FIELD PROPERTY_BACKING_FIELD name:UTF_8 type:java.nio.charset.Charset visibility:public [final,static]' type=java.nio.charset.Charset origin=null
+        CATCH parameter=val <unused var>: java.lang.Exception [val] declared in com.example.mytube.browser.WebViewManager.interceptYoutubeApi
+          VAR CATCH_PARAMETER name:<unused var> type:java.lang.Exception [val]
+          BLOCK type=kotlin.Nothing? origin=null
+            CONST Null type=kotlin.Nothing? value=null
+
+	at org.jetbrains.kotlin.backend.jvm.codegen.FunctionCodegen.generate(FunctionCodegen.kt:50)
+	at org.jetbrains.kotlin.backend.jvm.codegen.FunctionCodegen.generate$default(FunctionCodegen.kt:43)
+	at org.jetbrains.kotlin.backend.jvm.codegen.ClassCodegen.generateMethodNode(ClassCodegen.kt:422)
+	at org.jetbrains.kotlin.backend.jvm.codegen.ClassCodegen.generateMethod(ClassCodegen.kt:439)
+	at org.jetbrains.kotlin.backend.jvm.codegen.ClassCodegen.generate(ClassCodegen.kt:164)
+	at org.jetbrains.kotlin.backend.jvm.JvmIrCodegenFactory.generateFile(JvmIrCodegenFactory.kt:419)
+	at org.jetbrains.kotlin.backend.jvm.JvmIrCodegenFactory.invokeCodegen(JvmIrCodegenFactory.kt:388)
+	at org.jetbrains.kotlin.cli.jvm.compiler.KotlinToJVMBytecodeCompiler.runCodegen$cli(KotlinToJVMBytecodeCompiler.kt:431)
+	at org.jetbrains.kotlin.cli.pipeline.jvm.JvmBackendPipelinePhase.executePhase(JvmBackendPipelinePhase.kt:95)
+	at org.jetbrains.kotlin.cli.pipeline.jvm.JvmBackendPipelinePhase.executePhase(JvmBackendPipelinePhase.kt:36)
+	at org.jetbrains.kotlin.cli.pipeline.jvm.JvmBackendPipelinePhase.executePhase(JvmBackendPipelinePhase.kt:29)
+	at org.jetbrains.kotlin.cli.pipeline.PipelinePhase.phaseBody(PipelinePhase.kt:68)
+	at org.jetbrains.kotlin.cli.pipeline.PipelinePhase.phaseBody(PipelinePhase.kt:58)
+	at org.jetbrains.kotlin.config.phaser.NamedCompilerPhase.invoke(CompilerPhase.kt:102)
+	at org.jetbrains.kotlin.backend.common.phaser.CompositePhase.invoke(PhaseBuilders.kt:22)
+	at org.jetbrains.kotlin.config.phaser.CompilerPhaseKt.invokeToplevel(CompilerPhase.kt:53)
+	at org.jetbrains.kotlin.cli.pipeline.AbstractCliPipeline.runPhasedPipeline(AbstractCliPipeline.kt:109)
+	at org.jetbrains.kotlin.cli.pipeline.AbstractCliPipeline.execute(AbstractCliPipeline.kt:68)
+	at org.jetbrains.kotlin.cli.jvm.K2JVMCompiler.doExecutePhased(K2JVMCompiler.kt:78)
+	at org.jetbrains.kotlin.cli.jvm.K2JVMCompiler.doExecutePhased(K2JVMCompiler.kt:44)
+	at org.jetbrains.kotlin.cli.common.CLICompiler.execImpl(CLICompiler.kt:90)
+	at org.jetbrains.kotlin.cli.common.CLICompiler.exec(CLICompiler.kt:352)
+	at org.jetbrains.kotlin.incremental.IncrementalJvmCompilerRunnerBase.runCompiler(IncrementalJvmCompilerRunnerBase.kt:175)
+	at org.jetbrains.kotlin.incremental.IncrementalJvmCompilerRunnerBase.runCompiler(IncrementalJvmCompilerRunnerBase.kt:38)
+	at org.jetbrains.kotlin.incremental.IncrementalCompilerRunner.doCompile(IncrementalCompilerRunner.kt:504)
+	at org.jetbrains.kotlin.incremental.IncrementalCompilerRunner.compileImpl(IncrementalCompilerRunner.kt:421)
+	at org.jetbrains.kotlin.incremental.IncrementalCompilerRunner.tryCompileIncrementally$lambda$10$compile(IncrementalCompilerRunner.kt:254)
+	at org.jetbrains.kotlin.incremental.IncrementalCompilerRunner.tryCompileIncrementally(IncrementalCompilerRunner.kt:272)
+	at org.jetbrains.kotlin.incremental.IncrementalCompilerRunner.compile(IncrementalCompilerRunner.kt:124)
+	at org.jetbrains.kotlin.daemon.CompileServiceImplBase.execIncrementalCompiler(CompileServiceImpl.kt:679)
+	at org.jetbrains.kotlin.daemon.CompileServiceImplBase.access$execIncrementalCompiler(CompileServiceImpl.kt:93)
+	at org.jetbrains.kotlin.daemon.CompileServiceImpl.compile(CompileServiceImpl.kt:1806)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(Unknown Source)
+	at java.base/java.lang.reflect.Method.invoke(Unknown Source)
+	at java.rmi/sun.rmi.server.UnicastServerRef.dispatch(Unknown Source)
+	at java.rmi/sun.rmi.transport.Transport$1.run(Unknown Source)
+	at java.rmi/sun.rmi.transport.Transport$1.run(Unknown Source)
+	at java.base/java.security.AccessController.doPrivileged(Unknown Source)
+	at java.rmi/sun.rmi.transport.Transport.serviceCall(Unknown Source)
+	at java.rmi/sun.rmi.transport.tcp.TCPTransport.handleMessages(Unknown Source)
+	at java.rmi/sun.rmi.transport.tcp.TCPTransport$ConnectionHandler.run0(Unknown Source)
+	at java.rmi/sun.rmi.transport.tcp.TCPTransport$ConnectionHandler.lambda$run$0(Unknown Source)
+	at java.base/java.security.AccessController.doPrivileged(Unknown Source)
+	at java.rmi/sun.rmi.transport.tcp.TCPTransport$ConnectionHandler.run(Unknown Source)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(Unknown Source)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(Unknown Source)
+	at java.base/java.lang.Thread.run(Unknown Source)
+Caused by: java.lang.AssertionError: Unexpected IR element found during code generation. Either code generation for it is not implemented, or it should have been lowered:
+ERROR_CALL 'Unresolved reference: <Unresolved name: requestBody>#' type=IrErrorType([Error type: Unresolved type for requestBody])
+	at org.jetbrains.kotlin.backend.jvm.codegen.ExpressionCodegen.visitElement(ExpressionCodegen.kt:942)
+	at org.jetbrains.kotlin.backend.jvm.codegen.ExpressionCodegen.visitElement(ExpressionCodegen.kt:135)
+	at org.jetbrains.kotlin.ir.visitors.IrVisitor.visitExpression(IrVisitor.kt:83)
+	at org.jetbrains.kotlin.ir.visitors.IrVisitor.visitErrorExpression(IrVisitor.kt:203)
+	at org.jetbrains.kotlin.ir.visitors.IrVisitor.visitErrorCallExpression(IrVisitor.kt:206)
+	at org.jetbrains.kotlin.ir.expressions.IrErrorCallExpression.accept(IrErrorCallExpression.kt:24)
+	at org.jetbrains.kotlin.backend.jvm.codegen.ExpressionCodegen.visitStatementContainer(ExpressionCodegen.kt:527)
+	at org.jetbrains.kotlin.backend.jvm.codegen.ExpressionCodegen.visitContainerExpression(ExpressionCodegen.kt:541)
+	at org.jetbrains.kotlin.backend.jvm.codegen.ExpressionCodegen.visitContainerExpression(ExpressionCodegen.kt:135)
+	at org.jetbrains.kotlin.ir.visitors.IrVisitor.visitBlock(IrVisitor.kt:122)
+	at org.jetbrains.kotlin.backend.jvm.codegen.ExpressionCodegen.visitBlock(ExpressionCodegen.kt:413)
+	at org.jetbrains.kotlin.backend.jvm.codegen.ExpressionCodegen.visitBlock(ExpressionCodegen.kt:135)
+	at org.jetbrains.kotlin.ir.expressions.IrBlock.accept(IrBlock.kt:18)
+	at org.jetbrains.kotlin.backend.jvm.codegen.ExpressionCodegen.visitWhen(ExpressionCodegen.kt:1049)
+	at org.jetbrains.kotlin.backend.jvm.codegen.ExpressionCodegen.visitWhen(ExpressionCodegen.kt:135)
+	at org.jetbrains.kotlin.ir.expressions.IrWhen.accept(IrWhen.kt:24)
+	at org.jetbrains.kotlin.backend.jvm.codegen.ExpressionCodegen.visitVariable(ExpressionCodegen.kt:725)
+	at org.jetbrains.kotlin.backend.jvm.codegen.ExpressionCodegen.visitVariable(ExpressionCodegen.kt:135)
+	at org.jetbrains.kotlin.ir.declarations.IrVariable.accept(IrVariable.kt:36)
+	at org.jetbrains.kotlin.backend.jvm.codegen.ExpressionCodegen.visitStatementContainer(ExpressionCodegen.kt:527)
+	at org.jetbrains.kotlin.backend.jvm.codegen.ExpressionCodegen.visitContainerExpression(ExpressionCodegen.kt:541)
+	at org.jetbrains.kotlin.backend.jvm.codegen.ExpressionCodegen.visitContainerExpression(ExpressionCodegen.kt:135)
+	at org.jetbrains.kotlin.ir.visitors.IrVisitor.visitBlock(IrVisitor.kt:122)
+	at org.jetbrains.kotlin.backend.jvm.codegen.ExpressionCodegen.visitBlock(ExpressionCodegen.kt:413)
+	at org.jetbrains.kotlin.backend.jvm.codegen.ExpressionCodegen.visitBlock(ExpressionCodegen.kt:135)
+	at org.jetbrains.kotlin.ir.expressions.IrBlock.accept(IrBlock.kt:18)
+	at org.jetbrains.kotlin.backend.jvm.codegen.ExpressionCodegen.visitStatementContainer(ExpressionCodegen.kt:527)
+	at org.jetbrains.kotlin.backend.jvm.codegen.ExpressionCodegen.visitContainerExpression(ExpressionCodegen.kt:541)
+	at org.jetbrains.kotlin.backend.jvm.codegen.ExpressionCodegen.visitContainerExpression(ExpressionCodegen.kt:135)
+	at org.jetbrains.kotlin.ir.visitors.IrVisitor.visitComposite(IrVisitor.kt:125)
+	at org.jetbrains.kotlin.ir.expressions.IrComposite.accept(IrComposite.kt:18)
+	at org.jetbrains.kotlin.backend.jvm.codegen.ExpressionCodegen.visitWhen(ExpressionCodegen.kt:1049)
+	at org.jetbrains.kotlin.backend.jvm.codegen.ExpressionCodegen.visitWhen(ExpressionCodegen.kt:135)
+	at org.jetbrains.kotlin.ir.expressions.IrWhen.accept(IrWhen.kt:24)
+	at org.jetbrains.kotlin.backend.jvm.codegen.ExpressionCodegen.visitStatementContainer(ExpressionCodegen.kt:527)
+	at org.jetbrains.kotlin.backend.jvm.codegen.ExpressionCodegen.visitContainerExpression(ExpressionCodegen.kt:541)
+	at org.jetbrains.kotlin.backend.jvm.codegen.ExpressionCodegen.visitContainerExpression(ExpressionCodegen.kt:135)
+	at org.jetbrains.kotlin.ir.visitors.IrVisitor.visitBlock(IrVisitor.kt:122)
+	at org.jetbrains.kotlin.backend.jvm.codegen.ExpressionCodegen.visitBlock(ExpressionCodegen.kt:413)
+	at org.jetbrains.kotlin.backend.jvm.codegen.ExpressionCodegen.visitBlock(ExpressionCodegen.kt:135)
+	at org.jetbrains.kotlin.ir.expressions.IrBlock.accept(IrBlock.kt:18)
+	at org.jetbrains.kotlin.backend.jvm.codegen.ExpressionCodegen.visitTryWithInfo(ExpressionCodegen.kt:1287)
+	at org.jetbrains.kotlin.backend.jvm.codegen.ExpressionCodegen.visitTry(ExpressionCodegen.kt:1278)
+	at org.jetbrains.kotlin.backend.jvm.codegen.ExpressionCodegen.visitTry(ExpressionCodegen.kt:135)
+	at org.jetbrains.kotlin.ir.expressions.IrTry.accept(IrTry.kt:26)
+	at org.jetbrains.kotlin.backend.jvm.codegen.ExpressionCodegen.visitReturn(ExpressionCodegen.kt:999)
+	at org.jetbrains.kotlin.backend.jvm.codegen.ExpressionCodegen.visitReturn(ExpressionCodegen.kt:135)
+	at org.jetbrains.kotlin.ir.expressions.IrReturn.accept(IrReturn.kt:24)
+	at org.jetbrains.kotlin.backend.jvm.codegen.ExpressionCodegen.visitStatementContainer(ExpressionCodegen.kt:527)
+	at org.jetbrains.kotlin.backend.jvm.codegen.ExpressionCodegen.visitBlockBody(ExpressionCodegen.kt:532)
+	at org.jetbrains.kotlin.backend.jvm.codegen.ExpressionCodegen.visitBlockBody(ExpressionCodegen.kt:135)
+	at org.jetbrains.kotlin.ir.expressions.IrBlockBody.accept(IrBlockBody.kt:20)
+	at org.jetbrains.kotlin.backend.jvm.codegen.ExpressionCodegen.generate(ExpressionCodegen.kt:233)
+	at org.jetbrains.kotlin.backend.jvm.codegen.FunctionCodegen.doGenerate(FunctionCodegen.kt:126)
+	at org.jetbrains.kotlin.backend.jvm.codegen.FunctionCodegen.generate(FunctionCodegen.kt:47)
+	... 46 more
+
+
