@@ -10,4 +10,14 @@ class MediaWebView(context: Context) : WebView(context) {
             super.onWindowVisibilityChanged(View.VISIBLE)
         }
     }
+
+    override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
+        super.onWindowFocusChanged(true)
+    }
+
+    override fun onPause() {
+    }
+
+    override fun onResume() {
+    }
 }

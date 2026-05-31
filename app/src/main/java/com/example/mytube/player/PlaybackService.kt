@@ -32,8 +32,9 @@ class PlaybackService : Service() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val keepAliveRunnable = object : Runnable {
         override fun run() {
+            if (wakeLock?.isHeld == false) wakeLock?.acquire()
             evaluateJs("window.MyTubeBgTick && window.MyTubeBgTick()")
-            mainHandler.postDelayed(this, 1000)
+            mainHandler.postDelayed(this, 200)
         }
     }
 
@@ -78,7 +79,7 @@ class PlaybackService : Service() {
             ACTION_START -> {
                 isPlaying = true
                 requestAudioFocus()
-                if (wakeLock?.isHeld == false) wakeLock?.acquire(10 * 60 * 1000L /*10 minutes*/)
+                if (wakeLock?.isHeld == false) wakeLock?.acquire()
                 startWithNotification()
                 mainHandler.removeCallbacks(keepAliveRunnable)
                 mainHandler.post(keepAliveRunnable)
@@ -105,7 +106,7 @@ class PlaybackService : Service() {
                 
                 if (isPlaying) {
                     requestAudioFocus()
-                    if (wakeLock?.isHeld == false) wakeLock?.acquire(10 * 60 * 1000L)
+                    if (wakeLock?.isHeld == false) wakeLock?.acquire()
                 }
                 
                 mediaSession?.setMetadata(

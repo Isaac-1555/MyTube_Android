@@ -39,8 +39,6 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             playbackManager.updateMetadata(playing, title, duration, position)
             if (playing && bgPlaybackEnabled.value) {
                 playbackManager.startService()
-            } else if (!playing) {
-                playbackManager.stopService()
             }
         }
 
