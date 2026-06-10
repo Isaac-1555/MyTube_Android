@@ -15,6 +15,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.LibraryMusic
+import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
@@ -63,6 +64,7 @@ fun BrowserScreen(
                 onForward = { viewModel.goForward() },
                 onReload = { viewModel.reload() },
                 onYoutubeMusic = { viewModel.loadUrl("https://music.youtube.com") },
+                onYoutube = { viewModel.loadUrl("https://youtube.com") },
                 onSettings = onSettingsClick,
                 onBlackOverlay = { showBlackOverlay = !showBlackOverlay }
             )
@@ -95,6 +97,7 @@ private fun BottomControls(
     onBack: () -> Unit,
     onForward: () -> Unit,
     onReload: () -> Unit,
+    onYoutube: () -> Unit,
     onYoutubeMusic: () -> Unit,
     onSettings: () -> Unit,
     onBlackOverlay: () -> Unit
@@ -115,6 +118,9 @@ private fun BottomControls(
             Icon(Icons.Default.Refresh, contentDescription = "Reload")
         }
         Spacer(Modifier.weight(1f))
+        IconButton(onClick = onYoutube) {
+            Icon(Icons.Default.Videocam, contentDescription = "YouTube")
+        }
         IconButton(onClick = onYoutubeMusic) {
             Icon(Icons.Default.LibraryMusic, contentDescription = "YouTube Music")
         }
