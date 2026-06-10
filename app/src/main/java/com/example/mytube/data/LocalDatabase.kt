@@ -4,7 +4,6 @@ import android.content.ContentValues
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
-import com.example.mytube.data.entity.BookmarkEntity
 import com.example.mytube.data.entity.FilterRuleEntity
 import com.example.mytube.data.entity.ScriptEntity
 
@@ -24,15 +23,6 @@ class LocalDatabase(context: Context) : SQLiteOpenHelper(context, DB_NAME, null,
         )
         db.execSQL(
             """
-            CREATE TABLE bookmarks (
-                url TEXT PRIMARY KEY,
-                title TEXT NOT NULL,
-                timestamp INTEGER NOT NULL
-            )
-            """.trimIndent()
-        )
-        db.execSQL(
-            """
             CREATE TABLE filter_rules (
                 pattern TEXT PRIMARY KEY,
                 enabled INTEGER NOT NULL DEFAULT 1,
@@ -44,7 +34,6 @@ class LocalDatabase(context: Context) : SQLiteOpenHelper(context, DB_NAME, null,
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         db.execSQL("DROP TABLE IF EXISTS scripts")
-        db.execSQL("DROP TABLE IF EXISTS bookmarks")
         db.execSQL("DROP TABLE IF EXISTS filter_rules")
         onCreate(db)
     }
@@ -104,44 +93,6 @@ class LocalDatabase(context: Context) : SQLiteOpenHelper(context, DB_NAME, null,
     fun setScriptEnabled(id: String, enabled: Boolean) {
         val values = ContentValues().apply { put("enabled", if (enabled) 1 else 0) }
         writableDatabase.update("scripts", values, "id = ?", arrayOf(id))
-    }
-
-    // Bookmarks
-    fun getAllBookmarks(): List<BookmarkEntity> {
-        val list = mutableListOf<BookmarkEntity>()
-        val cursor = readableDatabase.query("bookmarks", null, null, null, null, null, "timestamp DESC")
-        cursor.use {
-            while (it.moveToNext()) {
-                list.add(
-                    BookmarkEntity(
-                        url = it.getString(it.getColumnIndexOrThrow("url")),
-                        title = it.getString(it.getColumnIndexOrThrow("title")),
-                        timestamp = it.getLong(it.getColumnIndexOrThrow("timestamp"))
-                    )
-                )
-            }
-        }
-        return list
-    }
-
-    fun insertBookmark(bookmark: BookmarkEntity) {
-        val values = ContentValues().apply {
-            put("url", bookmark.url)
-            put("title", bookmark.title)
-            put("timestamp", bookmark.timestamp)
-        }
-        writableDatabase.insertWithOnConflict("bookmarks", null, values, SQLiteDatabase.CONFLICT_REPLACE)
-    }
-
-    fun deleteBookmark(url: String) {
-        writableDatabase.delete("bookmarks", "url = ?", arrayOf(url))
-    }
-
-    fun bookmarkExists(url: String): Boolean {
-        val cursor = readableDatabase.query(
-            "bookmarks", arrayOf("url"), "url = ?", arrayOf(url), null, null, null
-        )
-        return cursor.use { it.count > 0 }
     }
 
     // Filter rules

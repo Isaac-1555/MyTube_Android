@@ -11,6 +11,7 @@ object NavigationBlocker {
         Constants.YOUTUBE_SHORT,
         "accounts.google.com",
         "accounts.youtube.com",
+        "music.youtube.com",
     )
 
     fun shouldAllowNavigation(url: String): Boolean {

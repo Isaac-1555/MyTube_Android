@@ -5,7 +5,6 @@ import com.example.mytube.adblock.AdBlockManager
 import com.example.mytube.adblock.FilterListUpdater
 import com.example.mytube.browser.WebViewManager
 import com.example.mytube.data.LocalDatabase
-import com.example.mytube.data.repository.BookmarkRepository
 import com.example.mytube.injection.ScriptManager
 import com.example.mytube.injection.ScriptRepository
 import com.example.mytube.player.PlaybackManager
@@ -15,7 +14,6 @@ class AppContainer(context: Context) {
     private val db = LocalDatabase(context)
     val prefsManager = PreferencesManager(context)
 
-    val bookmarkRepository = BookmarkRepository(db)
     val scriptRepository = ScriptRepository(db)
     val webViewManager = WebViewManager()
     val filterListUpdater = FilterListUpdater(context)

@@ -20,4 +20,11 @@ class MediaWebView(context: Context) : WebView(context) {
 
     override fun onResume() {
     }
+
+    override fun onDetachedFromWindow() {
+        try {
+            super.onDetachedFromWindow()
+        } catch (_: Exception) {
+        }
+    }
 }

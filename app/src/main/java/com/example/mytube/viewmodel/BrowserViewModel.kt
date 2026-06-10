@@ -14,13 +14,9 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
     val webViewManager = container.webViewManager
     val playbackManager = container.playbackManager
-    val bookmarkRepository = container.bookmarkRepository
     val prefsManager = container.prefsManager
 
     val bgPlaybackEnabled = prefsManager.backgroundPlayback.stateIn(
-        viewModelScope, SharingStarted.Eagerly, true
-    )
-    val autoPipEnabled = prefsManager.autoPip.stateIn(
         viewModelScope, SharingStarted.Eagerly, true
     )
 
@@ -86,16 +82,6 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     fun reload() {
         webViewManager.reload()
     }
-
-    fun toggleBookmark(url: String, title: String) {
-        if (bookmarkRepository.exists(url)) {
-            bookmarkRepository.remove(url)
-        } else {
-            bookmarkRepository.add(url, title)
-        }
-    }
-
-    fun isBookmarked(url: String): Boolean = bookmarkRepository.exists(url)
 
     private fun injectScripts() {
         container.scriptManager.seedDefaults()

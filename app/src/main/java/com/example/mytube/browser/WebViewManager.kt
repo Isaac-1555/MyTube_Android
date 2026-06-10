@@ -6,6 +6,7 @@ import android.os.Handler
 import android.os.Looper
 import android.view.ViewGroup
 import android.webkit.JavascriptInterface
+import android.view.View
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
@@ -57,6 +58,17 @@ class WebViewManager {
     var onNavigationBlocked: ((String) -> Unit)? = null
     var shouldIntercept: ((String) -> WebResourceResponse?)? = null
     var onPlaybackUpdate: ((Boolean, String, Double, Double) -> Unit)? = null
+
+    private var customView: View? = null
+    private var customViewCallback: WebChromeClient.CustomViewCallback? = null
+
+    private val _fullscreenView = mutableStateOf<View?>(null)
+    var fullscreenView: View?
+        get() = _fullscreenView.value
+        private set(value) { _fullscreenView.value = value }
+
+    val isFullscreen: Boolean
+        get() = customView != null
 
     private inner class PlaybackBridge {
         @JavascriptInterface
@@ -130,6 +142,20 @@ class WebViewManager {
                 override fun onReceivedTitle(view: WebView, title: String?) {
                     _pageTitle.value = title ?: "MyTube"
                 }
+
+                override fun onShowCustomView(view: View, callback: CustomViewCallback) {
+                    customViewCallback?.onCustomViewHidden()
+                    customView = view
+                    customViewCallback = callback
+                    _fullscreenView.value = view
+                }
+
+                override fun onHideCustomView() {
+                    customViewCallback?.onCustomViewHidden()
+                    customView = null
+                    customViewCallback = null
+                    _fullscreenView.value = null
+                }
             }
         }
         try {
@@ -142,20 +168,27 @@ class WebViewManager {
         webView = wv
     }
 
+    fun hideCustomView() {
+        customViewCallback?.onCustomViewHidden()
+        customView = null
+        customViewCallback = null
+        _fullscreenView.value = null
+    }
+
     companion object {
         private const val TAG = "WebViewManager"
-        private val AD_DOMAINS = listOf(
+    }
+
+    private fun blockAdDomain(url: String): WebResourceResponse? {
+        val host = kotlin.runCatching { java.net.URI(url).host }.getOrNull() ?: return null
+        val adDomains = listOf(
             "doubleclick.net",
             "googlesyndication.com",
             "googleadservices.com",
             "adservice.google.com",
             "pagead2.googlesyndication.com"
         )
-    }
-
-    private fun blockAdDomain(url: String): WebResourceResponse? {
-        val host = kotlin.runCatching { java.net.URI(url).host }.getOrNull() ?: return null
-        if (AD_DOMAINS.any { host.contains(it, ignoreCase = true) }) {
+        if (adDomains.any { host.contains(it, ignoreCase = true) }) {
             android.util.Log.d(TAG, "Blocked ad domain: $url")
             return WebResourceResponse("text/plain", "utf-8", 204, "No Content", emptyMap(), ByteArrayInputStream(ByteArray(0)))
         }

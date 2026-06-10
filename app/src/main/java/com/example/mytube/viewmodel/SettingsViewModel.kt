@@ -4,7 +4,6 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.mytube.MyTubeApplication
-import com.example.mytube.data.entity.BookmarkEntity
 import com.example.mytube.data.entity.ScriptEntity
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -22,8 +21,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     val adblockEnabled: StateFlow<Boolean> = container.prefsManager.adblockEnabled
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
-    fun getBookmarks(): List<BookmarkEntity> = container.bookmarkRepository.getAll()
-
     fun getScripts(): List<ScriptEntity> = container.scriptRepository.getAll()
 
     fun setBackgroundPlayback(enabled: Boolean) {
@@ -40,9 +37,5 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun toggleScript(id: String, enabled: Boolean) {
         container.scriptRepository.setEnabled(id, enabled)
-    }
-
-    fun removeBookmark(url: String) {
-        container.bookmarkRepository.remove(url)
     }
 }

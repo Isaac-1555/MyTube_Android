@@ -34,7 +34,7 @@ class PlaybackService : Service() {
         override fun run() {
             if (wakeLock?.isHeld == false) wakeLock?.acquire()
             evaluateJs("window.MyTubeBgTick && window.MyTubeBgTick()")
-            mainHandler.postDelayed(this, 200)
+            mainHandler.postDelayed(this, 1000)
         }
     }
 

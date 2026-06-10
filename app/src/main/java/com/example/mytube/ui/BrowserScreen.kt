@@ -13,18 +13,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.Bookmark
-import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.PictureInPicture
+import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -32,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import com.example.mytube.ui.components.BrowserWebView
 import com.example.mytube.viewmodel.BrowserViewModel
 
@@ -39,7 +38,6 @@ import com.example.mytube.viewmodel.BrowserViewModel
 fun BrowserScreen(
     viewModel: BrowserViewModel,
     onSettingsClick: () -> Unit,
-    onPipClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val mgr = viewModel.webViewManager
@@ -64,12 +62,19 @@ fun BrowserScreen(
                 onBack = { viewModel.goBack() },
                 onForward = { viewModel.goForward() },
                 onReload = { viewModel.reload() },
-                onPip = onPipClick,
+                onYoutubeMusic = { viewModel.loadUrl("https://music.youtube.com") },
                 onSettings = onSettingsClick,
-                isBookmarked = false,
-                onToggleBookmark = { viewModel.toggleBookmark(mgr.currentUrl, mgr.pageTitle) },
                 onBlackOverlay = { showBlackOverlay = !showBlackOverlay }
             )
+        }
+
+        mgr.fullscreenView?.let { fullView ->
+            key(fullView.hashCode()) {
+                AndroidView(
+                    factory = { fullView },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
         }
 
         if (showBlackOverlay) {
@@ -90,10 +95,8 @@ private fun BottomControls(
     onBack: () -> Unit,
     onForward: () -> Unit,
     onReload: () -> Unit,
-    onPip: () -> Unit,
+    onYoutubeMusic: () -> Unit,
     onSettings: () -> Unit,
-    isBookmarked: Boolean,
-    onToggleBookmark: () -> Unit,
     onBlackOverlay: () -> Unit
 ) {
     Row(
@@ -111,15 +114,9 @@ private fun BottomControls(
         IconButton(onClick = onReload) {
             Icon(Icons.Default.Refresh, contentDescription = "Reload")
         }
-        IconButton(onClick = onToggleBookmark) {
-            Icon(
-                if (isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                contentDescription = "Bookmark"
-            )
-        }
         Spacer(Modifier.weight(1f))
-        IconButton(onClick = onPip) {
-            Icon(Icons.Default.PictureInPicture, contentDescription = "PiP")
+        IconButton(onClick = onYoutubeMusic) {
+            Icon(Icons.Default.LibraryMusic, contentDescription = "YouTube Music")
         }
         IconButton(onClick = onBlackOverlay) {
             Icon(Icons.Default.DarkMode, contentDescription = "Screen off")

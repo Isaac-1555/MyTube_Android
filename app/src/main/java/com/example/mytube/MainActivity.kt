@@ -1,9 +1,8 @@
 package com.example.mytube
 
-import android.app.PictureInPictureParams
+import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
-import android.util.Rational
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -19,7 +18,6 @@ import androidx.lifecycle.ViewModelProvider
 import com.example.mytube.ui.BrowserScreen
 import com.example.mytube.ui.SettingsSheet
 import com.example.mytube.ui.theme.MyTubeTheme
-import com.example.mytube.util.Constants
 import com.example.mytube.viewmodel.BrowserViewModel
 import com.example.mytube.viewmodel.SettingsViewModel
 
@@ -46,7 +44,6 @@ class MainActivity : ComponentActivity() {
                     BrowserScreen(
                         viewModel = browserViewModel,
                         onSettingsClick = { showSettings = true },
-                        onPipClick = { enterPip() },
                         modifier = Modifier.padding(innerPadding)
                     )
                 }
@@ -54,14 +51,17 @@ class MainActivity : ComponentActivity() {
                 if (showSettings) {
                     SettingsSheet(
                         viewModel = settingsViewModel,
-                        onDismiss = { showSettings = false },
-                        onBookmarkClick = { url ->
-                            showSettings = false
-                            browserViewModel.loadUrl(url)
-                        }
+                        onDismiss = { showSettings = false }
                     )
                 }
             }
+        }
+    }
+
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        if (!isInPictureInPictureMode) {
+            browserViewModel.webViewManager.hideCustomView()
         }
     }
 
@@ -72,17 +72,5 @@ class MainActivity : ComponentActivity() {
 
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
-        if (browserViewModel.autoPipEnabled.value) {
-            enterPip()
-        }
-    }
-
-    private fun enterPip() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val params = PictureInPictureParams.Builder()
-                .setAspectRatio(Rational(Constants.PIP_RATIO_WIDTH, Constants.PIP_RATIO_HEIGHT))
-                .build()
-            enterPictureInPictureMode(params)
-        }
     }
 }
