@@ -31,6 +31,11 @@
     } catch(e) {}
 
     window.MyTubeUserPaused = false;
+    window.MyTubeBgMode = false;
+
+    window.setBackgroundMode = function(enabled) {
+        window.MyTubeBgMode = enabled;
+    };
 
     window.MyTubePause = function() {
         window.MyTubeUserPaused = true;
@@ -46,7 +51,7 @@
     window.MyTubeBgTick = function() {
         var v = document.querySelector('video');
         if (!v) return;
-        if (!window.MyTubeUserPaused && v.currentTime > 0 && v.paused) {
+        if (window.MyTubeBgMode && !window.MyTubeUserPaused && v.currentTime > 0 && v.paused) {
             v.play().catch(function(){});
         }
         reportState();

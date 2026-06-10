@@ -41,7 +41,7 @@ fun SettingsSheet(
     var scripts by remember { mutableStateOf<List<ScriptEntity>>(emptyList()) }
 
     LaunchedEffect(Unit) {
-        scripts = viewModel.getScripts()
+        scripts = viewModel.getScripts().filter { it.id != "background_playback" }
     }
 
     ModalBottomSheet(

@@ -6,12 +6,11 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.media.AudioFocusRequest
-import android.media.AudioManager
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.media.AudioManager
 import android.os.PowerManager
 import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.MediaSessionCompat
@@ -25,14 +24,11 @@ import com.example.mytube.util.Constants
 class PlaybackService : Service() {
     private var mediaSession: MediaSessionCompat? = null
     private var wakeLock: PowerManager.WakeLock? = null
-    private lateinit var audioManager: AudioManager
-    private var audioFocusRequest: AudioFocusRequest? = null
     private var isPlaying = false
     private var currentTitle = "MyTube"
     private val mainHandler = Handler(Looper.getMainLooper())
     private val keepAliveRunnable = object : Runnable {
         override fun run() {
-            if (wakeLock?.isHeld == false) wakeLock?.acquire()
             evaluateJs("window.MyTubeBgTick && window.MyTubeBgTick()")
             mainHandler.postDelayed(this, 1000)
         }
@@ -46,22 +42,10 @@ class PlaybackService : Service() {
         }
     }
 
-    private val audioFocusChangeListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
-        when (focusChange) {
-            AudioManager.AUDIOFOCUS_LOSS, AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
-                evaluateJs("window.MyTubePause && window.MyTubePause()")
-            }
-            AudioManager.AUDIOFOCUS_GAIN -> {
-                evaluateJs("window.MyTubePlay && window.MyTubePlay()")
-            }
-        }
-    }
-
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
-        audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
         wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, Constants.WAKE_LOCK_TAG)
         
@@ -78,19 +62,16 @@ class PlaybackService : Service() {
         when (intent?.action) {
             ACTION_START -> {
                 isPlaying = true
-                requestAudioFocus()
-                if (wakeLock?.isHeld == false) wakeLock?.acquire()
                 startWithNotification()
-                mainHandler.removeCallbacks(keepAliveRunnable)
-                mainHandler.post(keepAliveRunnable)
+                acquireWakeLock()
+                startHeartbeat()
             }
             ACTION_PLAY -> {
                 isPlaying = true
                 evaluateJs("window.MyTubePlay && window.MyTubePlay()")
                 updatePlaybackState(true)
                 startWithNotification()
-                mainHandler.removeCallbacks(keepAliveRunnable)
-                mainHandler.post(keepAliveRunnable)
+                startHeartbeat()
             }
             ACTION_PAUSE -> {
                 isPlaying = false
@@ -103,11 +84,6 @@ class PlaybackService : Service() {
                 currentTitle = intent.getStringExtra("title") ?: "MyTube"
                 val duration = intent.getLongExtra("duration", 0L)
                 val position = intent.getLongExtra("position", 0L)
-                
-                if (isPlaying) {
-                    requestAudioFocus()
-                    if (wakeLock?.isHeld == false) wakeLock?.acquire()
-                }
                 
                 mediaSession?.setMetadata(
                     MediaMetadataCompat.Builder()
@@ -127,33 +103,21 @@ class PlaybackService : Service() {
                         .build()
                 )
                 startWithNotification()
+                if (isPlaying) {
+                    acquireWakeLock()
+                    startHeartbeat()
+                }
             }
             ACTION_STOP -> stop()
         }
         return START_STICKY
     }
     
-    private fun requestAudioFocus() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            audioFocusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
-                .setOnAudioFocusChangeListener(audioFocusChangeListener)
-                .build()
-            audioFocusRequest?.let { audioManager.requestAudioFocus(it) }
-        } else {
-            @Suppress("DEPRECATION")
-            audioManager.requestAudioFocus(audioFocusChangeListener, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN)
-        }
+    private fun startHeartbeat() {
+        mainHandler.removeCallbacks(keepAliveRunnable)
+        mainHandler.post(keepAliveRunnable)
     }
     
-    private fun abandonAudioFocus() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            audioFocusRequest?.let { audioManager.abandonAudioFocusRequest(it) }
-        } else {
-            @Suppress("DEPRECATION")
-            audioManager.abandonAudioFocus(audioFocusChangeListener)
-        }
-    }
-
     private fun setupMediaSession() {
         val intent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
@@ -204,15 +168,21 @@ class PlaybackService : Service() {
         )
     }
     
+    private fun acquireWakeLock() {
+        wakeLock?.let {
+            if (!it.isHeld) it.acquire()
+        }
+    }
+    
     private fun evaluateJs(script: String) {
-        (application as? MyTubeApplication)?.container?.playbackManager?.jsEvaluator?.invoke(script)
+        try {
+            (application as? MyTubeApplication)?.container?.playbackManager?.jsEvaluator?.invoke(script)
+        } catch (_: Exception) { }
     }
 
     private fun stop() {
         mainHandler.removeCallbacks(keepAliveRunnable)
         mediaSession?.isActive = false
-        if (wakeLock?.isHeld == true) wakeLock?.release()
-        abandonAudioFocus()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
@@ -221,8 +191,9 @@ class PlaybackService : Service() {
         mainHandler.removeCallbacks(keepAliveRunnable)
         unregisterReceiver(noisyReceiver)
         mediaSession?.release()
-        if (wakeLock?.isHeld == true) wakeLock?.release()
-        abandonAudioFocus()
+        wakeLock?.let {
+            if (it.isHeld) it.release()
+        }
         super.onDestroy()
     }
 
@@ -237,8 +208,7 @@ class PlaybackService : Service() {
             isPlaying = true
             evaluateJs("window.MyTubePlay && window.MyTubePlay()")
             updatePlaybackState(true)
-            mainHandler.removeCallbacks(keepAliveRunnable)
-            mainHandler.post(keepAliveRunnable)
+            startHeartbeat()
         }
 
         override fun onStop() {

@@ -8,7 +8,7 @@ class ScriptManager(
     private val repository: ScriptRepository
 ) {
     fun loadAndInject(injector: (String, InjectionTime) -> Unit) {
-        val enabled = repository.getEnabled()
+        val enabled = repository.getEnabled().filter { it.id != "background_playback" }
         for (script in enabled) {
             val time = when (script.injectionTime) {
                 "atDocumentStart" -> InjectionTime.AT_DOCUMENT_START
@@ -16,29 +16,16 @@ class ScriptManager(
             }
             injector(script.source, time)
         }
+        val bgSource = loadAsset("scripts/background_playback.js") ?: return
+        injector(bgSource, InjectionTime.AT_DOCUMENT_END)
     }
 
     fun seedDefaults() {
         val existing = repository.getAll()
         val existingIds = existing.map { it.id }.toSet()
 
-        listOf(
-            "scripts/background_playback.js" to "Background Playback"
-        ).forEach { (assetPath, name) ->
-            val id = assetPath.removePrefix("scripts/").removeSuffix(".js")
-            if (id !in existingIds) {
-                val source = loadAsset(assetPath) ?: return@forEach
-                repository.upsert(
-                    ScriptEntity(
-                        id = id,
-                        name = name,
-                        enabled = true,
-                        source = source,
-                        injectionTime = "atDocumentEnd"
-                    )
-                )
-            }
-        }
+        // Core scripts seeded here. background_playback is injected unconditionally
+        // in loadAndInject() — not user-toggleable.
     }
 
     fun loadAsset(path: String): String? {
