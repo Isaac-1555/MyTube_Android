@@ -33,6 +33,7 @@ class PlaybackService : Service() {
             mainHandler.postDelayed(this, 1000)
         }
     }
+    private val idleTimeoutRunnable = Runnable { stop() }
 
     private val noisyReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -63,8 +64,6 @@ class PlaybackService : Service() {
             ACTION_START -> {
                 isPlaying = true
                 startWithNotification()
-                acquireWakeLock()
-                startHeartbeat()
             }
             ACTION_PLAY -> {
                 isPlaying = true
@@ -72,14 +71,19 @@ class PlaybackService : Service() {
                 updatePlaybackState(true)
                 startWithNotification()
                 startHeartbeat()
+                cancelIdleTimeout()
             }
             ACTION_PAUSE -> {
                 isPlaying = false
                 evaluateJs("window.MyTubePause && window.MyTubePause()")
                 updatePlaybackState(false)
                 startWithNotification()
+                stopHeartbeat()
+                releaseWakeLock()
+                startIdleTimeout()
             }
             Constants.ACTION_UPDATE_METADATA -> {
+                val wasPlaying = isPlaying
                 isPlaying = intent.getBooleanExtra("playing", false)
                 currentTitle = intent.getStringExtra("title") ?: "MyTube"
                 val duration = intent.getLongExtra("duration", 0L)
@@ -106,16 +110,34 @@ class PlaybackService : Service() {
                 if (isPlaying) {
                     acquireWakeLock()
                     startHeartbeat()
+                    cancelIdleTimeout()
+                } else if (wasPlaying) {
+                    stopHeartbeat()
+                    releaseWakeLock()
+                    startIdleTimeout()
                 }
             }
             ACTION_STOP -> stop()
         }
-        return START_STICKY
+        return START_NOT_STICKY
     }
     
     private fun startHeartbeat() {
         mainHandler.removeCallbacks(keepAliveRunnable)
         mainHandler.post(keepAliveRunnable)
+    }
+    
+    private fun stopHeartbeat() {
+        mainHandler.removeCallbacks(keepAliveRunnable)
+    }
+
+    private fun startIdleTimeout() {
+        mainHandler.removeCallbacks(idleTimeoutRunnable)
+        mainHandler.postDelayed(idleTimeoutRunnable, 30_000L)
+    }
+
+    private fun cancelIdleTimeout() {
+        mainHandler.removeCallbacks(idleTimeoutRunnable)
     }
     
     private fun setupMediaSession() {
@@ -173,6 +195,12 @@ class PlaybackService : Service() {
             if (!it.isHeld) it.acquire()
         }
     }
+
+    private fun releaseWakeLock() {
+        wakeLock?.let {
+            if (it.isHeld) it.release()
+        }
+    }
     
     private fun evaluateJs(script: String) {
         try {
@@ -181,19 +209,20 @@ class PlaybackService : Service() {
     }
 
     private fun stop() {
-        mainHandler.removeCallbacks(keepAliveRunnable)
+        stopHeartbeat()
+        cancelIdleTimeout()
+        releaseWakeLock()
         mediaSession?.isActive = false
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
 
     override fun onDestroy() {
-        mainHandler.removeCallbacks(keepAliveRunnable)
+        stopHeartbeat()
+        cancelIdleTimeout()
+        releaseWakeLock()
         unregisterReceiver(noisyReceiver)
         mediaSession?.release()
-        wakeLock?.let {
-            if (it.isHeld) it.release()
-        }
         super.onDestroy()
     }
 
@@ -202,13 +231,18 @@ class PlaybackService : Service() {
             isPlaying = false
             evaluateJs("window.MyTubePause && window.MyTubePause()")
             updatePlaybackState(false)
+            stopHeartbeat()
+            releaseWakeLock()
+            startIdleTimeout()
         }
 
         override fun onPlay() {
             isPlaying = true
             evaluateJs("window.MyTubePlay && window.MyTubePlay()")
             updatePlaybackState(true)
+            acquireWakeLock()
             startHeartbeat()
+            cancelIdleTimeout()
         }
 
         override fun onStop() {
