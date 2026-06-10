@@ -19,8 +19,8 @@ window.__yt_adblock=true;
 if(!location.hostname.includes('youtube.com'))return;
 try{window.yt=window.yt||{};window.yt.config_=window.yt.config_||{};window.yt.config_.ADS_ENABLED=false;}catch(e){}
 try{window.ytplayer=window.ytplayer||{};window.ytplayer.config=window.ytplayer.config||{};window.ytplayer.config.args=window.ytplayer.config.args||{};window.ytplayer.config.args.ad_easy_enabled=false;}catch(e){}
-try{Object.defineProperty(Object.prototype,'hasAllowedInstreamAd',{value:true,writable:false,configurable:false});}catch(e){}
-try{Object.defineProperty(Object.prototype,'adBlocksFound',{value:0,writable:false,configurable:false});}catch(e){}
+try{Object.defineProperty(Object.prototype,'hasAllowedInstreamAd',{value:true,writable:true,configurable:false});}catch(e){}
+try{Object.defineProperty(Object.prototype,'adBlocksFound',{value:0,writable:true,configurable:false});}catch(e){}
 function stripAdFields(t){
 if(typeof t!=='string')return t;
 t=t.replace(/"adPlacements"/g,'"no_ads"');

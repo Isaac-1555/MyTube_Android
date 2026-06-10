@@ -12,6 +12,8 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.webkit.CookieManager
+import android.webkit.WebSettings
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -93,10 +95,14 @@ class WebViewManager {
                 builtInZoomControls = false
                 setSupportZoom(false)
                 mediaPlaybackRequiresUserGesture = false
+                userAgentString = WebSettings.getDefaultUserAgent(wv.context)
+                    .replace("; wv", "")
+                mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    isAlgorithmicDarkeningAllowed = true
+                    isAlgorithmicDarkeningAllowed = false
                 }
             }
+            CookieManager.getInstance().setAcceptThirdPartyCookies(wv, true)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, false)
             }
