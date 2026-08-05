@@ -80,6 +80,10 @@ class MainActivity : ComponentActivity() {
         if (browserViewModel.bgPlaybackEnabled.value) {
             browserViewModel.webViewManager.evaluateJs("window.MyTubeBgTick && window.MyTubeBgTick()")
             browserViewModel.webViewManager.evaluateJs("window.setBackgroundMode && window.setBackgroundMode(true)")
+        } else {
+            browserViewModel.webViewManager.evaluateJs("window.MyTubePause && window.MyTubePause()")
+            browserViewModel.webViewManager.evaluateJs("window.setBackgroundMode && window.setBackgroundMode(false)")
+            browserViewModel.playbackManager.stopService()
         }
     }
 

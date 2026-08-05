@@ -71,9 +71,22 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
         playbackManager.jsEvaluator = { webViewManager.evaluateJsFromMainThread(it) }
         webViewManager.onPlaybackUpdate = { playing, title, duration, position ->
-            playbackManager.updateMetadata(playing, title, duration, position)
-            if (playing && bgPlaybackEnabled.value) {
-                playbackManager.startService()
+            if (bgPlaybackEnabled.value) {
+                playbackManager.updateMetadata(playing, title, duration, position)
+            } else if (!playing) {
+                playbackManager.stopService()
+            }
+        }
+
+        viewModelScope.launch {
+            bgPlaybackEnabled.collect { enabled ->
+                if (enabled) {
+                    container.scriptManager.loadAsset("scripts/background_playback.js")
+                        ?.let { webViewManager.evaluateJs(it) }
+                } else {
+                    playbackManager.stopService()
+                    webViewManager.evaluateJs("window.setBackgroundMode && window.setBackgroundMode(false)")
+                }
             }
         }
 
@@ -124,9 +137,9 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
     private fun injectScripts() {
         container.scriptManager.seedDefaults()
-        container.scriptManager.loadAndInject { source, _ ->
+        container.scriptManager.loadAndInject({ source, _ ->
             webViewManager.evaluateJs(source)
-        }
+        }, includeBgPlayback = bgPlaybackEnabled.value)
     }
 
     override fun onCleared() {

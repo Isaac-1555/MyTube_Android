@@ -7,7 +7,7 @@ class ScriptManager(
     private val context: Context,
     private val repository: ScriptRepository
 ) {
-    fun loadAndInject(injector: (String, InjectionTime) -> Unit) {
+    fun loadAndInject(injector: (String, InjectionTime) -> Unit, includeBgPlayback: Boolean = true) {
         val enabled = repository.getEnabled().filter { it.id != "background_playback" }
         for (script in enabled) {
             val time = when (script.injectionTime) {
@@ -16,6 +16,7 @@ class ScriptManager(
             }
             injector(script.source, time)
         }
+        if (!includeBgPlayback) return
         val bgSource = loadAsset("scripts/background_playback.js") ?: return
         injector(bgSource, InjectionTime.AT_DOCUMENT_END)
     }
