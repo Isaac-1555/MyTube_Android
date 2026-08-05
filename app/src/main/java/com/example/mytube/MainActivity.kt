@@ -36,6 +36,11 @@ class MainActivity : ComponentActivity() {
         browserViewModel = ViewModelProvider(this)[BrowserViewModel::class.java]
         settingsViewModel = ViewModelProvider(this)[SettingsViewModel::class.java]
 
+        browserViewModel.onSleepTimerFired = {
+            finishAffinity()
+            android.os.Process.killProcess(android.os.Process.myPid())
+        }
+
         setContent {
             MyTubeTheme {
                 var showSettings by remember { mutableStateOf(false) }

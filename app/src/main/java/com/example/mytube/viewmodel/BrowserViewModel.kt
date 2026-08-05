@@ -4,7 +4,12 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.mytube.MyTubeApplication
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -19,6 +24,40 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     val bgPlaybackEnabled = prefsManager.backgroundPlayback.stateIn(
         viewModelScope, SharingStarted.Eagerly, true
     )
+
+    private val _sleepTimerRemaining = MutableStateFlow<Long?>(null)
+    val sleepTimerRemaining: StateFlow<Long?> = _sleepTimerRemaining.asStateFlow()
+
+    private var sleepTimerJob: Job? = null
+    var onSleepTimerFired: (() -> Unit)? = null
+
+    fun setSleepTimer(minutes: Int) {
+        sleepTimerJob?.cancel()
+        if (minutes <= 0) {
+            _sleepTimerRemaining.value = null
+            return
+        }
+        _sleepTimerRemaining.value = minutes * 60_000L
+        sleepTimerJob = viewModelScope.launch {
+            while (true) {
+                delay(1000)
+                val remaining = _sleepTimerRemaining.value ?: break
+                if (remaining <= 1000) {
+                    _sleepTimerRemaining.value = null
+                    fireSleepTimer()
+                    break
+                } else {
+                    _sleepTimerRemaining.value = remaining - 1000
+                }
+            }
+        }
+    }
+
+    private fun fireSleepTimer() {
+        sleepTimerJob = null
+        playbackManager.destroy()
+        onSleepTimerFired?.invoke()
+    }
 
     init {
         val abm = container.adBlockManager
@@ -92,6 +131,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
     override fun onCleared() {
         super.onCleared()
+        sleepTimerJob?.cancel()
         webViewManager.destroy()
         playbackManager.destroy()
     }
