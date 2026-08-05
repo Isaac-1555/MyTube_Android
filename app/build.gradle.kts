@@ -54,8 +54,6 @@ dependencies {
     implementation(libs.datastore.preferences)
     implementation(libs.coroutines.android)
     implementation(libs.lifecycle.process)
-    implementation(libs.media3.exoplayer)
-    implementation(libs.media3.session)
     implementation(libs.androidx.media)
 
     testImplementation(libs.junit)

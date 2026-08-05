@@ -4,7 +4,6 @@ import android.content.ContentValues
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
-import com.example.mytube.data.entity.FilterRuleEntity
 import com.example.mytube.data.entity.ScriptEntity
 
 class LocalDatabase(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, DB_VERSION) {
@@ -21,20 +20,10 @@ class LocalDatabase(context: Context) : SQLiteOpenHelper(context, DB_NAME, null,
             )
             """.trimIndent()
         )
-        db.execSQL(
-            """
-            CREATE TABLE filter_rules (
-                pattern TEXT PRIMARY KEY,
-                enabled INTEGER NOT NULL DEFAULT 1,
-                type TEXT NOT NULL DEFAULT 'host'
-            )
-            """.trimIndent()
-        )
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         db.execSQL("DROP TABLE IF EXISTS scripts")
-        db.execSQL("DROP TABLE IF EXISTS filter_rules")
         onCreate(db)
     }
 
@@ -95,37 +84,8 @@ class LocalDatabase(context: Context) : SQLiteOpenHelper(context, DB_NAME, null,
         writableDatabase.update("scripts", values, "id = ?", arrayOf(id))
     }
 
-    // Filter rules
-    fun getEnabledHostPatterns(): List<String> {
-        val list = mutableListOf<String>()
-        val cursor = readableDatabase.query(
-            "filter_rules", arrayOf("pattern"), "enabled = 1 AND type = 'host'",
-            null, null, null, null
-        )
-        cursor.use {
-            while (it.moveToNext()) {
-                list.add(it.getString(it.getColumnIndexOrThrow("pattern")))
-            }
-        }
-        return list
-    }
-
-    fun upsertFilterRule(rule: FilterRuleEntity) {
-        val values = ContentValues().apply {
-            put("pattern", rule.pattern)
-            put("enabled", if (rule.enabled) 1 else 0)
-            put("type", rule.type)
-        }
-        writableDatabase.insertWithOnConflict("filter_rules", null, values, SQLiteDatabase.CONFLICT_REPLACE)
-    }
-
-    fun setFilterEnabled(pattern: String, enabled: Boolean) {
-        val values = ContentValues().apply { put("enabled", if (enabled) 1 else 0) }
-        writableDatabase.update("filter_rules", values, "pattern = ?", arrayOf(pattern))
-    }
-
     companion object {
         const val DB_NAME = "mytube_db"
-        const val DB_VERSION = 1
+        const val DB_VERSION = 2
     }
 }

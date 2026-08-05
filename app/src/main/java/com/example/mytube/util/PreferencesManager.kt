@@ -16,11 +16,13 @@ class PreferencesManager(private val context: Context) {
         val BG_PLAYBACK = booleanPreferencesKey("bg_playback")
         val AUTO_PIP = booleanPreferencesKey("auto_pip")
         val ADBLOCK_ENABLED = booleanPreferencesKey("adblock_enabled")
+        val NOTIF_PERM_REQUESTED = booleanPreferencesKey("notif_perm_requested")
     }
 
     val backgroundPlayback: Flow<Boolean> = context.dataStore.data.map { it[BG_PLAYBACK] ?: true }
     val autoPip: Flow<Boolean> = context.dataStore.data.map { it[AUTO_PIP] ?: true }
     val adblockEnabled: Flow<Boolean> = context.dataStore.data.map { it[ADBLOCK_ENABLED] ?: true }
+    val notifPermissionRequested: Flow<Boolean> = context.dataStore.data.map { it[NOTIF_PERM_REQUESTED] ?: false }
 
     suspend fun setBackgroundPlayback(enabled: Boolean) {
         context.dataStore.edit { it[BG_PLAYBACK] = enabled }
@@ -32,5 +34,9 @@ class PreferencesManager(private val context: Context) {
 
     suspend fun setAdblockEnabled(enabled: Boolean) {
         context.dataStore.edit { it[ADBLOCK_ENABLED] = enabled }
+    }
+
+    suspend fun markNotifPermissionRequested() {
+        context.dataStore.edit { it[NOTIF_PERM_REQUESTED] = true }
     }
 }

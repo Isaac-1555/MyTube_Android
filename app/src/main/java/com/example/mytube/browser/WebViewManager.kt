@@ -60,6 +60,7 @@ class WebViewManager {
     var onNavigationBlocked: ((String) -> Unit)? = null
     var shouldIntercept: ((String) -> WebResourceResponse?)? = null
     var onPlaybackUpdate: ((Boolean, String, Double, Double) -> Unit)? = null
+    var networkBlocker: ((String) -> Boolean)? = null
 
     private var customView: View? = null
     private var customViewCallback: WebChromeClient.CustomViewCallback? = null
@@ -104,7 +105,7 @@ class WebViewManager {
             }
             CookieManager.getInstance().setAcceptThirdPartyCookies(wv, true)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, false)
+                setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, true)
             }
             addJavascriptInterface(PlaybackBridge(), "Android")
             webViewClient = object : WebViewClient() {
@@ -119,6 +120,9 @@ class WebViewManager {
 
                 override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
                     val url = request.url.toString()
+                    if (networkBlocker?.invoke(url) == true) {
+                        return WebResourceResponse("text/plain", "utf-8", 204, "No Content", emptyMap(), ByteArrayInputStream(ByteArray(0)))
+                    }
                     blockAdDomain(url)?.let { return it }
                     return shouldIntercept?.invoke(url)
                 }

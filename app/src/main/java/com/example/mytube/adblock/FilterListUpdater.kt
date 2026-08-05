@@ -30,13 +30,27 @@ class FilterListUpdater(private val context: Context) {
         for (url in sources) {
             try {
                 val name = url.substringAfterLast('/')
-                val content = URL(url).readText()
+                val content = download(url) ?: continue
                 File(dir, name).writeText(content)
                 downloaded++
                 lines += content.lines().size
             } catch (_: Exception) { }
         }
         UpdateResult(downloaded, lines)
+    }
+
+    private fun download(url: String): String? {
+        val conn = (URL(url).openConnection() as? java.net.HttpURLConnection) ?: return null
+        return try {
+            conn.connectTimeout = 10_000
+            conn.readTimeout = 10_000
+            conn.setRequestProperty("User-Agent", "MyTube/1.0")
+            conn.inputStream.bufferedReader().use { it.readText() }
+        } catch (_: Exception) {
+            null
+        } finally {
+            conn.disconnect()
+        }
     }
 
     fun loadCached(): List<String> {

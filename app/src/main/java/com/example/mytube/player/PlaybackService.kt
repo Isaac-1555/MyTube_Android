@@ -29,11 +29,17 @@ class PlaybackService : Service() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val keepAliveRunnable = object : Runnable {
         override fun run() {
-            evaluateJs("window.MyTubeBgTick && window.MyTubeBgTick()")
-            mainHandler.postDelayed(this, 1000)
+            val pm = (application as? MyTubeApplication)?.container?.playbackManager
+            if (pm?.isAppForeground != true) {
+                evaluateJs("window.MyTubeBgTick && window.MyTubeBgTick()")
+            }
+            mainHandler.postDelayed(this, HEARTBEAT_INTERVAL_MS)
         }
     }
     private val idleTimeoutRunnable = Runnable { stop() }
+    private var lastNotifiedTitle = ""
+    private var lastNotifiedDuration = -1L
+    private var lastNotifiedPlaying = false
 
     private val noisyReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -106,7 +112,13 @@ class PlaybackService : Service() {
                         .setActions(PlaybackStateCompat.ACTION_PLAY or PlaybackStateCompat.ACTION_PAUSE or PlaybackStateCompat.ACTION_STOP)
                         .build()
                 )
-                startWithNotification()
+                val notifyChanged = currentTitle != lastNotifiedTitle ||
+                    duration != lastNotifiedDuration ||
+                    isPlaying != lastNotifiedPlaying
+                lastNotifiedTitle = currentTitle
+                lastNotifiedDuration = duration
+                lastNotifiedPlaying = isPlaying
+                if (notifyChanged) startWithNotification()
                 if (isPlaying) {
                     acquireWakeLock()
                     startHeartbeat()
@@ -255,5 +267,6 @@ class PlaybackService : Service() {
         const val ACTION_PLAY = "com.example.mytube.action.PLAY"
         const val ACTION_PAUSE = "com.example.mytube.action.PAUSE"
         const val ACTION_STOP = "com.example.mytube.action.STOP"
+        private const val HEARTBEAT_INTERVAL_MS = 5000L
     }
 }

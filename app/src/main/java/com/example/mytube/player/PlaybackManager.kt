@@ -12,7 +12,14 @@ class PlaybackManager(private val context: Context) {
 
     val isServiceRunning = AtomicBoolean(false)
 
+    @Volatile
+    var isAppForeground = true
+
     var jsEvaluator: ((String) -> Unit)? = null
+
+    fun setAppInForeground(foreground: Boolean) {
+        isAppForeground = foreground
+    }
 
     fun startService() {
         if (!isServiceRunning.compareAndSet(false, true)) return
@@ -38,7 +45,11 @@ class PlaybackManager(private val context: Context) {
     
     fun updateMetadata(playing: Boolean, title: String, duration: Double, position: Double) {
         isPlaying = playing
-        if (playing) startService()
+        if (playing) {
+            startService()
+        } else if (!isServiceRunning.get()) {
+            return
+        }
         val intent = Intent(context, PlaybackService::class.java).apply {
             action = Constants.ACTION_UPDATE_METADATA
             putExtra("playing", playing)

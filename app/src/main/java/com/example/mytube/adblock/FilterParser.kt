@@ -86,13 +86,13 @@ object FilterParser {
         return result
     }
 
-    fun filterMatches(filter: UblockFilter.Network, url: String): Boolean {
+    fun filterMatches(filter: UblockFilter.Network, url: String, host: String? = null): Boolean {
         val p = filter.pattern
         return when {
             p.startsWith("||") -> {
                 val domain = p.removePrefix("||")
-                val host = kotlin.runCatching { java.net.URI(url).host }.getOrNull() ?: return false
-                host == domain || host.endsWith(".$domain") || host.endsWith(":$domain") || url.contains("/$domain/")
+                val h = host ?: runCatching { java.net.URI(url).host }.getOrNull() ?: return false
+                h == domain || h.endsWith(".$domain") || url.contains("/$domain/")
             }
             p.startsWith("|") -> {
                 val exact = p.removePrefix("|")

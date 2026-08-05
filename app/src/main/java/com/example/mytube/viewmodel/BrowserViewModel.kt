@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.mytube.MyTubeApplication
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,6 +25,14 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     val bgPlaybackEnabled = prefsManager.backgroundPlayback.stateIn(
         viewModelScope, SharingStarted.Eagerly, true
     )
+
+    val notifPermissionRequested = prefsManager.notifPermissionRequested.stateIn(
+        viewModelScope, SharingStarted.Eagerly, false
+    )
+
+    fun markNotifPermissionRequested() {
+        viewModelScope.launch { prefsManager.markNotifPermissionRequested() }
+    }
 
     private val _sleepTimerRemaining = MutableStateFlow<Long?>(null)
     val sleepTimerRemaining: StateFlow<Long?> = _sleepTimerRemaining.asStateFlow()
@@ -61,15 +70,14 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
     init {
         val abm = container.adBlockManager
-        if (abm.isReady) {
-            abm.loadCached()
-        } else {
-            viewModelScope.launch {
-                abm.downloadAndLoad()
-            }
+        when {
+            abm.isReady -> viewModelScope.launch(Dispatchers.Default) { abm.loadCached() }
+            container.filterListUpdater.hasCached() -> viewModelScope.launch(Dispatchers.Default) { abm.loadCached() }
+            else -> viewModelScope.launch { abm.downloadAndLoad() }
         }
 
         playbackManager.jsEvaluator = { webViewManager.evaluateJsFromMainThread(it) }
+        webViewManager.networkBlocker = { container.adBlockManager.shouldBlock(it) }
         webViewManager.onPlaybackUpdate = { playing, title, duration, position ->
             if (bgPlaybackEnabled.value) {
                 playbackManager.updateMetadata(playing, title, duration, position)

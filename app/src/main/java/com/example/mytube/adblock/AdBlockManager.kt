@@ -9,8 +9,17 @@ private val blockedUrlSubstrings = listOf(
 
 private val blockedHosts = setOf(
     "doubleclick.net", "googletagservices.com", "googlesyndication.com",
-    "googleadservices.com", "googlevideo.com",
+    "googleadservices.com",
 )
+
+private val contentHosts = setOf(
+    "googlevideo.com", "youtube.com", "ytimg.com",
+    "youtube-nocookie.com", "ggpht.com", "ytstatic.l.google.com",
+)
+
+private fun isContentHost(host: String): Boolean {
+    return contentHosts.any { host == it || host.endsWith(".$it") }
+}
 
 class AdBlockManager(private val updater: FilterListUpdater) {
     @Volatile
@@ -44,9 +53,11 @@ class AdBlockManager(private val updater: FilterListUpdater) {
 
     fun shouldBlock(url: String): Boolean {
         if (ready) {
+            val host = try { java.net.URI(url).host } catch (_: Exception) { return false }
+            if (host == null || isContentHost(host)) return false
             var blocked = false
             for (f in networkFilters) {
-                if (FilterParser.filterMatches(f, url)) {
+                if (FilterParser.filterMatches(f, url, host)) {
                     if (f.isException) return false
                     blocked = true
                 }
@@ -56,7 +67,8 @@ class AdBlockManager(private val updater: FilterListUpdater) {
 
         val uri = try { java.net.URI(url) } catch (_: Exception) { return false }
         val host = uri.host ?: return false
-        if (blockedHosts.any { host.endsWith(it) || it.endsWith(host) }) return true
+        if (isContentHost(host)) return false
+        if (blockedHosts.any { host.endsWith(it) }) return true
         return blockedUrlSubstrings.any { url.contains(it, ignoreCase = true) }
     }
 

@@ -64,15 +64,25 @@
         window.Android.onPlaybackStateChanged(!v.paused, title, v.duration || 0, v.currentTime || 0);
     }
 
+    var lastVideo = null;
+    function attachVideo(v) {
+        if (v === lastVideo) return;
+        if (lastVideo) {
+            lastVideo.removeEventListener('play', reportState);
+            lastVideo.removeEventListener('pause', reportState);
+        }
+        lastVideo = v;
+        v.addEventListener('play', reportState);
+        v.addEventListener('pause', reportState);
+        reportState();
+    }
+
+    var v0 = document.querySelector('video');
+    if (v0) attachVideo(v0);
+
     var videoObserver = new MutationObserver(function() {
         var v = document.querySelector('video');
-        if (v && !v._bgEvents) {
-            v._bgEvents = true;
-            v.addEventListener('play', reportState);
-            v.addEventListener('pause', reportState);
-            reportState();
-        }
+        if (v && v !== lastVideo) attachVideo(v);
     });
     videoObserver.observe(document.body, { childList: true, subtree: true });
-    setInterval(reportState, 2000);
 })();
