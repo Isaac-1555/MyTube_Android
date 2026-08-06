@@ -52,12 +52,13 @@ object FilterParser {
 
         val net = networkRe.find(s)
         if (net != null) {
+            // Parser can't honor $options (e.g. $domain, $third-party, ipaddress=).
+            // Applying the stripped pattern would create blanket matches like
+            // ||com (any .com host) or |https:// (every URL). Skip such filters.
+            if (s.contains('$') || s.contains("badfilter")) return null
             val isException = net.groupValues[1] == "@@"
             val prefix = net.groupValues[2]
-            var pattern = net.groupValues[3].removeSuffix("^")
-
-            val dollarIdx = pattern.indexOf('$')
-            if (dollarIdx >= 0) pattern = pattern.substring(0, dollarIdx)
+            val pattern = net.groupValues[3].removeSuffix("^")
 
             if (pattern.isNotBlank()) {
                 return UblockFilter.Network(

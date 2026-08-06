@@ -14,7 +14,8 @@ private val blockedHosts = setOf(
 
 private val contentHosts = setOf(
     "googlevideo.com", "youtube.com", "ytimg.com",
-    "youtube-nocookie.com", "ggpht.com", "ytstatic.l.google.com",
+    "youtube-nocookie.com", "ggpht.com", "googleusercontent.com",
+    "ytstatic.l.google.com",
 )
 
 private fun isContentHost(host: String): Boolean {
