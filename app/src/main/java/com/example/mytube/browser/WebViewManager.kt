@@ -105,7 +105,7 @@ class WebViewManager {
             }
             CookieManager.getInstance().setAcceptThirdPartyCookies(wv, true)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, true)
+                setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, false)
             }
             addJavascriptInterface(PlaybackBridge(), "Android")
             webViewClient = object : WebViewClient() {

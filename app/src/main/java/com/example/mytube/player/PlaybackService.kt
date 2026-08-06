@@ -119,14 +119,20 @@ class PlaybackService : Service() {
                 lastNotifiedDuration = duration
                 lastNotifiedPlaying = isPlaying
                 if (notifyChanged) startWithNotification()
+                val appForeground = (application as? MyTubeApplication)?.container?.playbackManager?.isAppForeground != false
                 if (isPlaying) {
                     acquireWakeLock()
                     startHeartbeat()
                     cancelIdleTimeout()
                 } else if (wasPlaying) {
-                    stopHeartbeat()
-                    releaseWakeLock()
-                    startIdleTimeout()
+                    if (appForeground) {
+                        stopHeartbeat()
+                        releaseWakeLock()
+                        startIdleTimeout()
+                    } else {
+                        startHeartbeat()
+                        cancelIdleTimeout()
+                    }
                 }
             }
             ACTION_STOP -> stop()
@@ -204,7 +210,7 @@ class PlaybackService : Service() {
     
     private fun acquireWakeLock() {
         wakeLock?.let {
-            if (!it.isHeld) it.acquire()
+            if (!it.isHeld) it.acquire(10 * 60 * 1000L)
         }
     }
 
@@ -267,6 +273,6 @@ class PlaybackService : Service() {
         const val ACTION_PLAY = "com.example.mytube.action.PLAY"
         const val ACTION_PAUSE = "com.example.mytube.action.PAUSE"
         const val ACTION_STOP = "com.example.mytube.action.STOP"
-        private const val HEARTBEAT_INTERVAL_MS = 5000L
+        private const val HEARTBEAT_INTERVAL_MS = 2000L
     }
 }
