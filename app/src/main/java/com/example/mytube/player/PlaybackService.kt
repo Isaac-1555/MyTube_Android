@@ -37,6 +37,7 @@ class PlaybackService : Service() {
         }
     }
     private val idleTimeoutRunnable = Runnable { stop() }
+    private val bgPauseTimeoutRunnable = Runnable { stop() }
     private var lastNotifiedTitle = ""
     private var lastNotifiedDuration = -1L
     private var lastNotifiedPlaying = false
@@ -69,6 +70,7 @@ class PlaybackService : Service() {
         when (intent?.action) {
             ACTION_START -> {
                 isPlaying = true
+                cancelBgPauseTimeout()
                 startWithNotification()
             }
             ACTION_PLAY -> {
@@ -78,6 +80,7 @@ class PlaybackService : Service() {
                 startWithNotification()
                 startHeartbeat()
                 cancelIdleTimeout()
+                cancelBgPauseTimeout()
             }
             ACTION_PAUSE -> {
                 isPlaying = false
@@ -87,6 +90,7 @@ class PlaybackService : Service() {
                 stopHeartbeat()
                 releaseWakeLock()
                 startIdleTimeout()
+                cancelBgPauseTimeout()
             }
             Constants.ACTION_UPDATE_METADATA -> {
                 val wasPlaying = isPlaying
@@ -124,6 +128,7 @@ class PlaybackService : Service() {
                     acquireWakeLock()
                     startHeartbeat()
                     cancelIdleTimeout()
+                    cancelBgPauseTimeout()
                 } else if (wasPlaying) {
                     if (appForeground) {
                         stopHeartbeat()
@@ -132,6 +137,7 @@ class PlaybackService : Service() {
                     } else {
                         startHeartbeat()
                         cancelIdleTimeout()
+                        startBgPauseTimeout()
                     }
                 }
             }
@@ -156,6 +162,15 @@ class PlaybackService : Service() {
 
     private fun cancelIdleTimeout() {
         mainHandler.removeCallbacks(idleTimeoutRunnable)
+    }
+
+    private fun startBgPauseTimeout() {
+        mainHandler.removeCallbacks(bgPauseTimeoutRunnable)
+        mainHandler.postDelayed(bgPauseTimeoutRunnable, BG_PAUSE_TIMEOUT_MS)
+    }
+
+    private fun cancelBgPauseTimeout() {
+        mainHandler.removeCallbacks(bgPauseTimeoutRunnable)
     }
     
     private fun setupMediaSession() {
@@ -229,6 +244,7 @@ class PlaybackService : Service() {
     private fun stop() {
         stopHeartbeat()
         cancelIdleTimeout()
+        cancelBgPauseTimeout()
         releaseWakeLock()
         mediaSession?.isActive = false
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -238,6 +254,7 @@ class PlaybackService : Service() {
     override fun onDestroy() {
         stopHeartbeat()
         cancelIdleTimeout()
+        cancelBgPauseTimeout()
         releaseWakeLock()
         unregisterReceiver(noisyReceiver)
         mediaSession?.release()
@@ -252,6 +269,7 @@ class PlaybackService : Service() {
             stopHeartbeat()
             releaseWakeLock()
             startIdleTimeout()
+            cancelBgPauseTimeout()
         }
 
         override fun onPlay() {
@@ -261,6 +279,7 @@ class PlaybackService : Service() {
             acquireWakeLock()
             startHeartbeat()
             cancelIdleTimeout()
+            cancelBgPauseTimeout()
         }
 
         override fun onStop() {
@@ -274,5 +293,6 @@ class PlaybackService : Service() {
         const val ACTION_PAUSE = "com.example.mytube.action.PAUSE"
         const val ACTION_STOP = "com.example.mytube.action.STOP"
         private const val HEARTBEAT_INTERVAL_MS = 2000L
+        private const val BG_PAUSE_TIMEOUT_MS = 60_000L
     }
 }
