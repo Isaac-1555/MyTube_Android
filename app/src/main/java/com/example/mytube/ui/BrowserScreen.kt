@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.AlertDialog
@@ -113,6 +114,7 @@ fun BrowserScreen(
                 BottomControls(
                     sleepTimerRemaining = sleepTimerRemaining,
                     isLocked = isLocked,
+                    onReload = { viewModel.reload() },
                     onYoutube = { viewModel.loadUrl("https://youtube.com") },
                     onYoutubeMusic = { viewModel.loadUrl("https://music.youtube.com") },
                     onSettings = onSettingsClick,
@@ -179,6 +181,7 @@ fun BrowserScreen(
 private fun BottomControls(
     sleepTimerRemaining: Long?,
     isLocked: Boolean,
+    onReload: () -> Unit,
     onYoutube: () -> Unit,
     onYoutubeMusic: () -> Unit,
     onSettings: () -> Unit,
@@ -192,6 +195,9 @@ private fun BottomControls(
             .padding(horizontal = 8.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        IconButton(onClick = onReload, enabled = !isLocked) {
+            Icon(Icons.Default.Refresh, contentDescription = "Reload")
+        }
         IconButton(onClick = onYoutube, enabled = !isLocked) {
             Icon(Icons.Default.Videocam, contentDescription = "YouTube")
         }
