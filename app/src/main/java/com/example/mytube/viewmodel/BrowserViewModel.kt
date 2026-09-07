@@ -26,6 +26,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
     private var ytLastUrlCache: String? = null
     private var moviesLastUrlCache: String? = null
+    private var animeLastUrlCache: String? = null
 
     fun switchToYoutube() {
         webViewManager.activate(BrowserMode.YOUTUBE)
@@ -49,6 +50,13 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         webViewManager.activate(BrowserMode.MOVIES)
         if (webViewManager.moviesWebView == null) {
             webViewManager.pendingMoviesUrl = moviesLastUrlCache ?: Constants.MOVIES_HOME
+        }
+    }
+
+    fun switchToAnime() {
+        webViewManager.activate(BrowserMode.ANIME)
+        if (webViewManager.animeWebView == null) {
+            webViewManager.pendingAnimeUrl = animeLastUrlCache ?: Constants.ANIME_HOME
         }
     }
 
@@ -168,6 +176,10 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                     moviesLastUrlCache = url
                     viewModelScope.launch { prefsManager.setMoviesLastUrl(url) }
                 }
+                BrowserMode.ANIME -> {
+                    animeLastUrlCache = url
+                    viewModelScope.launch { prefsManager.setAnimeLastUrl(url) }
+                }
             }
         }
         viewModelScope.launch {
@@ -175,6 +187,9 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         }
         viewModelScope.launch {
             prefsManager.moviesLastUrl.collect { moviesLastUrlCache = it }
+        }
+        viewModelScope.launch {
+            prefsManager.animeLastUrl.collect { animeLastUrlCache = it }
         }
         // Ad domain blocking in WebViewManager.shouldInterceptRequest.
         // Scriptlet handles ad stripping + YouTube internal config disabling.

@@ -118,6 +118,7 @@ fun BrowserScreen(
                     onYoutube = { viewModel.switchToYoutube() },
                     onYoutubeMusic = { viewModel.switchToYoutubeMusic() },
                     onMovies = { viewModel.switchToMovies() },
+                    onAnime = { viewModel.switchToAnime() },
                     onSettings = onSettingsClick,
                     onSleepTimer = { showSleepTimerSheet = true },
                     onToggleLock = { viewModel.toggleLock() }
@@ -186,6 +187,7 @@ private fun BottomControls(
     onYoutube: () -> Unit,
     onYoutubeMusic: () -> Unit,
     onMovies: () -> Unit,
+    onAnime: () -> Unit,
     onSettings: () -> Unit,
     onSleepTimer: () -> Unit,
     onToggleLock: () -> Unit
@@ -208,6 +210,9 @@ private fun BottomControls(
         }
         IconButton(onClick = onMovies, enabled = !isLocked) {
             Icon(painterResource(R.drawable.ic_clapperboard), contentDescription = "Movies")
+        }
+        IconButton(onClick = onAnime, enabled = !isLocked) {
+            Icon(painterResource(R.drawable.ic_shell), contentDescription = "Anime")
         }
         Spacer(Modifier.weight(1f))
         IconButton(onClick = onSleepTimer, enabled = !isLocked) {

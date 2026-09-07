@@ -27,7 +27,7 @@ import com.example.mytube.adblock.UblockScriptlets
 import com.example.mytube.util.Constants
 import java.io.ByteArrayInputStream
 
-enum class BrowserMode { YOUTUBE, MOVIES }
+enum class BrowserMode { YOUTUBE, MOVIES, ANIME }
 
 class WebViewManager {
     var webView: WebView? = null
@@ -36,12 +36,16 @@ class WebViewManager {
     var moviesWebView: WebView? = null
         private set
 
+    var animeWebView: WebView? = null
+        private set
+
     // First URL to load when each WebView is created (resume support).
     // Consumed once the WebView is created.
     var pendingYoutubeUrl: String? = null
     var pendingMoviesUrl: String? = null
+    var pendingAnimeUrl: String? = null
 
-    private var moviesProfile: Profile? = null
+    private val profiles = mutableMapOf<BrowserMode, Profile>()
 
     private val _activeMode = mutableStateOf(BrowserMode.YOUTUBE)
     var activeMode: BrowserMode
@@ -52,8 +56,11 @@ class WebViewManager {
         _activeMode.value = mode
     }
 
-    private fun activeWebView(): WebView? =
-        if (activeMode == BrowserMode.MOVIES) moviesWebView else webView
+    private fun activeWebView(): WebView? = when (activeMode) {
+        BrowserMode.YOUTUBE -> webView
+        BrowserMode.MOVIES -> moviesWebView
+        BrowserMode.ANIME -> animeWebView
+    }
 
     private val _currentUrl = mutableStateOf(Constants.YOUTUBE_HOME)
     var currentUrl: String
@@ -114,6 +121,7 @@ class WebViewManager {
         return when (mode) {
             BrowserMode.YOUTUBE -> webView ?: createYoutubeWebView(context)
             BrowserMode.MOVIES -> moviesWebView ?: createMoviesWebView(context)
+            BrowserMode.ANIME -> animeWebView ?: createAnimeWebView(context)
         }
     }
 
@@ -127,24 +135,8 @@ class WebViewManager {
         return wv
     }
 
-    @OptIn(WebViewBuilder.Experimental::class)
     private fun createMoviesWebView(context: Context): WebView {
-        moviesProfile = ensureMoviesProfile()
-        val wv: WebView = if (moviesProfile != null &&
-            WebViewFeature.isFeatureSupported(WebViewFeature.WEBVIEW_BUILDER_EXPERIMENTAL_V1)
-        ) {
-            try {
-                WebViewBuilder(WebViewBuilder.PRESET_LEGACY)
-                    .setProfile(Constants.MOVIE_PROFILE_NAME)
-                    .build(context)
-            } catch (_: Exception) {
-                moviesProfile = null
-                MediaWebView(context)
-            }
-        } else {
-            MediaWebView(context)
-        }
-        configureWebView(wv, BrowserMode.MOVIES)
+        val wv = createProfiledWebView(BrowserMode.MOVIES, Constants.MOVIE_PROFILE_NAME, context)
         moviesWebView = wv
         val initial = pendingMoviesUrl ?: Constants.MOVIES_HOME
         pendingMoviesUrl = null
@@ -152,10 +144,40 @@ class WebViewManager {
         return wv
     }
 
-    private fun ensureMoviesProfile(): Profile? {
+    private fun createAnimeWebView(context: Context): WebView {
+        val wv = createProfiledWebView(BrowserMode.ANIME, Constants.ANIME_PROFILE_NAME, context)
+        animeWebView = wv
+        val initial = pendingAnimeUrl ?: Constants.ANIME_HOME
+        pendingAnimeUrl = null
+        wv.loadUrl(initial)
+        return wv
+    }
+
+    @OptIn(WebViewBuilder.Experimental::class)
+    private fun createProfiledWebView(mode: BrowserMode, profileName: String, context: Context): WebView {
+        val profile = ensureProfile(profileName, mode)
+        val wv: WebView = if (profile != null &&
+            WebViewFeature.isFeatureSupported(WebViewFeature.WEBVIEW_BUILDER_EXPERIMENTAL_V1)
+        ) {
+            try {
+                WebViewBuilder(WebViewBuilder.PRESET_LEGACY)
+                    .setProfile(profileName)
+                    .build(context)
+            } catch (_: Exception) {
+                profiles.remove(mode)
+                MediaWebView(context)
+            }
+        } else {
+            MediaWebView(context)
+        }
+        configureWebView(wv, mode)
+        return wv
+    }
+
+    private fun ensureProfile(profileName: String, mode: BrowserMode): Profile? {
         if (!WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)) return null
         return try {
-            ProfileStore.getInstance().getOrCreateProfile(Constants.MOVIE_PROFILE_NAME)
+            ProfileStore.getInstance().getOrCreateProfile(profileName).also { profiles[mode] = it }
         } catch (_: Exception) {
             null
         }
@@ -184,10 +206,10 @@ class WebViewManager {
                     isAlgorithmicDarkeningAllowed = false
                 }
             }
-            if (mode == BrowserMode.MOVIES) {
-                moviesProfile?.cookieManager?.setAcceptThirdPartyCookies(this, true)
-            } else {
+            if (mode == BrowserMode.YOUTUBE) {
                 CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+            } else {
+                profiles[mode]?.cookieManager?.setAcceptThirdPartyCookies(this, true)
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, false)
@@ -196,7 +218,7 @@ class WebViewManager {
             webViewClient = object : WebViewClient() {
                 override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                     val url = request.url.toString()
-                    if (NavigationBlocker.shouldAllowNavigation(url, allowAll = mode == BrowserMode.MOVIES)) {
+                    if (NavigationBlocker.shouldAllowNavigation(url, allowAll = mode != BrowserMode.YOUTUBE)) {
                         return false
                     }
                     onNavigationBlocked?.invoke(url)
@@ -374,7 +396,7 @@ class WebViewManager {
     }
 
     fun destroy() {
-        listOf(webView, moviesWebView).forEach { wv ->
+        listOf(webView, moviesWebView, animeWebView).forEach { wv ->
             wv?.apply {
                 stopLoading()
                 destroy()
@@ -382,5 +404,6 @@ class WebViewManager {
         }
         webView = null
         moviesWebView = null
+        animeWebView = null
     }
 }
