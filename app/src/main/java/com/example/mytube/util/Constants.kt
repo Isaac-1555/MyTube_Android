@@ -11,6 +11,8 @@ object Constants {
     const val YOUTUBE_SHORT = "youtu.be"
     const val PIP_RATIO_WIDTH = 16
     const val PIP_RATIO_HEIGHT = 9
+    const val SWIPE_EDGE_WIDTH_DP = 24
+    const val SWIPE_THRESHOLD_DP = 64
     const val ACTION_UPDATE_METADATA = "com.example.mytube.action.UPDATE_METADATA"
     const val WAKE_LOCK_TAG = "mytube:background_playback"
 }

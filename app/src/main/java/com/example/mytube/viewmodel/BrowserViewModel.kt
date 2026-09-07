@@ -68,6 +68,32 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         onSleepTimerFired?.invoke()
     }
 
+    var onExitApp: (() -> Unit)? = null
+
+    private val _isLocked = MutableStateFlow(false)
+    val isLocked: StateFlow<Boolean> = _isLocked.asStateFlow()
+
+    fun toggleLock() {
+        _isLocked.value = !_isLocked.value
+    }
+
+    private val _showExitDialog = MutableStateFlow(false)
+    val showExitDialog: StateFlow<Boolean> = _showExitDialog.asStateFlow()
+
+    fun requestExit() {
+        _showExitDialog.value = true
+    }
+
+    fun dismissExitDialog() {
+        _showExitDialog.value = false
+    }
+
+    fun confirmExit() {
+        _showExitDialog.value = false
+        playbackManager.stopService()
+        onExitApp?.invoke()
+    }
+
     init {
         val abm = container.adBlockManager
         when {
@@ -129,14 +155,12 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         webViewManager.loadUrl(fixed)
     }
 
-    fun goBack() {
-        if (!webViewManager.goBack()) {
-            playbackManager.stopService()
-        }
+    fun goBack(): Boolean {
+        return webViewManager.goBack()
     }
 
-    fun goForward() {
-        webViewManager.goForward()
+    fun goForward(): Boolean {
+        return webViewManager.goForward()
     }
 
     fun reload() {

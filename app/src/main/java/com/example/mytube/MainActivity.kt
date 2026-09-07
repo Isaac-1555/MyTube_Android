@@ -8,6 +8,7 @@ import android.os.Build
 import android.os.Bundle
 import android.util.Rational
 import androidx.activity.ComponentActivity
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -32,6 +33,8 @@ class MainActivity : ComponentActivity() {
     private lateinit var browserViewModel: BrowserViewModel
     private lateinit var settingsViewModel: SettingsViewModel
 
+    private var isInPipMode by mutableStateOf(false)
+
     private val notifPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { }
@@ -51,6 +54,27 @@ class MainActivity : ComponentActivity() {
             finishAffinity()
         }
 
+        browserViewModel.onExitApp = {
+            finishAffinity()
+        }
+
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (isInPictureInPictureMode) {
+                    // Let the system dismiss the PiP window.
+                    isEnabled = false
+                    onBackPressedDispatcher.onBackPressed()
+                    isEnabled = true
+                    return
+                }
+                when {
+                    browserViewModel.isLocked.value -> Unit
+                    browserViewModel.webViewManager.canGoBack -> browserViewModel.goBack()
+                    else -> browserViewModel.requestExit()
+                }
+            }
+        })
+
         setContent {
             MyTubeTheme {
                 var showSettings by remember { mutableStateOf(false) }
@@ -59,6 +83,7 @@ class MainActivity : ComponentActivity() {
                     BrowserScreen(
                         viewModel = browserViewModel,
                         onSettingsClick = { showSettings = true },
+                        isInPipMode = isInPipMode,
                         modifier = Modifier.padding(innerPadding)
                     )
                 }
@@ -75,9 +100,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
-        if (isInPictureInPictureMode) {
-            browserViewModel.webViewManager.hideCustomView()
-        }
+        isInPipMode = isInPictureInPictureMode
     }
 
     override fun onResume() {
@@ -104,7 +127,9 @@ class MainActivity : ComponentActivity() {
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
             !isInPictureInPictureMode
         if (wantsPip) {
-            wm.hideCustomView()
+            if (!wm.isFullscreen) {
+                wm.scrollVideoIntoView()
+            }
             val params = PictureInPictureParams.Builder()
                 .setAspectRatio(Rational(Constants.PIP_RATIO_WIDTH, Constants.PIP_RATIO_HEIGHT))
                 .build()

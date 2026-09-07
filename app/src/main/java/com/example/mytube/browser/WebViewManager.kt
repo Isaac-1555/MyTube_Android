@@ -143,6 +143,13 @@ class WebViewManager {
                     _canGoForward.value = view.canGoForward()
                     onPageLoaded?.invoke(_currentUrl.value, _pageTitle.value)
                 }
+
+                override fun doUpdateVisitedHistory(view: WebView, url: String?, isReload: Boolean) {
+                    super.doUpdateVisitedHistory(view, url, isReload)
+                    if (url != null) _currentUrl.value = url
+                    _canGoBack.value = view.canGoBack()
+                    _canGoForward.value = view.canGoForward()
+                }
             }
             webChromeClient = object : WebChromeClient() {
                 override fun onProgressChanged(view: WebView, newProgress: Int) {
@@ -229,6 +236,13 @@ class WebViewManager {
 
     fun reload() {
         webView?.reload()
+    }
+
+    fun scrollVideoIntoView() {
+        evaluateJs(
+            "(function(){var v=document.querySelector('video');" +
+                "if(v){v.scrollIntoView({block:'center',inline:'center'});}})()"
+        )
     }
 
     fun evaluateJs(script: String) {
