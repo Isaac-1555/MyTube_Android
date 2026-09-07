@@ -24,12 +24,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.systemGestureExclusion
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bedtime
-import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -56,9 +54,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.example.mytube.R
 import com.example.mytube.ui.components.BrowserWebView
 import com.example.mytube.util.Constants
 import com.example.mytube.viewmodel.BrowserViewModel
@@ -115,8 +115,9 @@ fun BrowserScreen(
                     sleepTimerRemaining = sleepTimerRemaining,
                     isLocked = isLocked,
                     onReload = { viewModel.reload() },
-                    onYoutube = { viewModel.loadUrl("https://youtube.com") },
-                    onYoutubeMusic = { viewModel.loadUrl("https://music.youtube.com") },
+                    onYoutube = { viewModel.switchToYoutube() },
+                    onYoutubeMusic = { viewModel.switchToYoutubeMusic() },
+                    onMovies = { viewModel.switchToMovies() },
                     onSettings = onSettingsClick,
                     onSleepTimer = { showSleepTimerSheet = true },
                     onToggleLock = { viewModel.toggleLock() }
@@ -184,6 +185,7 @@ private fun BottomControls(
     onReload: () -> Unit,
     onYoutube: () -> Unit,
     onYoutubeMusic: () -> Unit,
+    onMovies: () -> Unit,
     onSettings: () -> Unit,
     onSleepTimer: () -> Unit,
     onToggleLock: () -> Unit
@@ -199,10 +201,13 @@ private fun BottomControls(
             Icon(Icons.Default.Refresh, contentDescription = "Reload")
         }
         IconButton(onClick = onYoutube, enabled = !isLocked) {
-            Icon(Icons.Default.Videocam, contentDescription = "YouTube")
+            Icon(painterResource(R.drawable.ic_youtube), contentDescription = "YouTube")
         }
         IconButton(onClick = onYoutubeMusic, enabled = !isLocked) {
-            Icon(Icons.Default.LibraryMusic, contentDescription = "YouTube Music")
+            Icon(painterResource(R.drawable.ic_youtube_music), contentDescription = "YouTube Music")
+        }
+        IconButton(onClick = onMovies, enabled = !isLocked) {
+            Icon(painterResource(R.drawable.ic_clapperboard), contentDescription = "Movies")
         }
         Spacer(Modifier.weight(1f))
         IconButton(onClick = onSleepTimer, enabled = !isLocked) {

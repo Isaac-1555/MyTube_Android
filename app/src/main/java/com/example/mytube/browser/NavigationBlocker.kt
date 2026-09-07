@@ -14,7 +14,8 @@ object NavigationBlocker {
         "music.youtube.com",
     )
 
-    fun shouldAllowNavigation(url: String): Boolean {
+    fun shouldAllowNavigation(url: String, allowAll: Boolean = false): Boolean {
+        if (allowAll) return true
         val uri = Uri.parse(url)
         return allowedHosts.contains(uri.host)
     }

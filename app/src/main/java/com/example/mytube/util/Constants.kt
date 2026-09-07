@@ -9,6 +9,10 @@ object Constants {
     const val YOUTUBE_M_HOST = "m.youtube.com"
     const val YOUTUBE_WWW_HOST = "www.youtube.com"
     const val YOUTUBE_SHORT = "youtu.be"
+    const val YOUTUBE_HOME = "https://www.youtube.com"
+    const val YOUTUBE_MUSIC_HOME = "https://music.youtube.com"
+    const val MOVIES_HOME = "https://cinehd.vc"
+    const val MOVIE_PROFILE_NAME = "movies"
     const val PIP_RATIO_WIDTH = 16
     const val PIP_RATIO_HEIGHT = 9
     const val SWIPE_EDGE_WIDTH_DP = 24

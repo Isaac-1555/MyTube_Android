@@ -1,32 +1,61 @@
 package com.example.mytube.browser
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.view.ViewGroup
-import android.webkit.JavascriptInterface
 import android.view.View
+import android.webkit.CookieManager
+import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import android.webkit.CookieManager
 import android.webkit.WebSettings
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.webkit.Profile
+import androidx.webkit.ProfileStore
+import androidx.webkit.WebViewBuilder
 import androidx.webkit.WebViewCompat
+import androidx.webkit.WebViewFeature
 import com.example.mytube.adblock.UblockScriptlets
+import com.example.mytube.util.Constants
 import java.io.ByteArrayInputStream
 
+enum class BrowserMode { YOUTUBE, MOVIES }
 
 class WebViewManager {
     var webView: WebView? = null
         private set
 
-    private val _currentUrl = mutableStateOf("https://www.youtube.com")
+    var moviesWebView: WebView? = null
+        private set
+
+    // First URL to load when each WebView is created (resume support).
+    // Consumed once the WebView is created.
+    var pendingYoutubeUrl: String? = null
+    var pendingMoviesUrl: String? = null
+
+    private var moviesProfile: Profile? = null
+
+    private val _activeMode = mutableStateOf(BrowserMode.YOUTUBE)
+    var activeMode: BrowserMode
+        get() = _activeMode.value
+        private set(value) { _activeMode.value = value }
+
+    fun activate(mode: BrowserMode) {
+        _activeMode.value = mode
+    }
+
+    private fun activeWebView(): WebView? =
+        if (activeMode == BrowserMode.MOVIES) moviesWebView else webView
+
+    private val _currentUrl = mutableStateOf(Constants.YOUTUBE_HOME)
     var currentUrl: String
         get() = _currentUrl.value
         private set(value) { _currentUrl.value = value }
@@ -57,6 +86,7 @@ class WebViewManager {
         private set(value) { _progress.value = value }
 
     var onPageLoaded: ((String, String) -> Unit)? = null
+    var onPersistablePage: ((BrowserMode, String) -> Unit)? = null
     var onNavigationBlocked: ((String) -> Unit)? = null
     var shouldIntercept: ((String) -> WebResourceResponse?)? = null
     var onPlaybackUpdate: ((Boolean, String, Double, Double) -> Unit)? = null
@@ -80,7 +110,58 @@ class WebViewManager {
         }
     }
 
-    fun attachWebView(wv: WebView) {
+    fun getOrCreateWebView(mode: BrowserMode, context: Context): WebView {
+        return when (mode) {
+            BrowserMode.YOUTUBE -> webView ?: createYoutubeWebView(context)
+            BrowserMode.MOVIES -> moviesWebView ?: createMoviesWebView(context)
+        }
+    }
+
+    private fun createYoutubeWebView(context: Context): WebView {
+        val wv = MediaWebView(context)
+        configureWebView(wv, BrowserMode.YOUTUBE)
+        webView = wv
+        val initial = pendingYoutubeUrl ?: Constants.YOUTUBE_HOME
+        pendingYoutubeUrl = null
+        wv.loadUrl(initial)
+        return wv
+    }
+
+    @OptIn(WebViewBuilder.Experimental::class)
+    private fun createMoviesWebView(context: Context): WebView {
+        moviesProfile = ensureMoviesProfile()
+        val wv: WebView = if (moviesProfile != null &&
+            WebViewFeature.isFeatureSupported(WebViewFeature.WEBVIEW_BUILDER_EXPERIMENTAL_V1)
+        ) {
+            try {
+                WebViewBuilder(WebViewBuilder.PRESET_LEGACY)
+                    .setProfile(Constants.MOVIE_PROFILE_NAME)
+                    .build(context)
+            } catch (_: Exception) {
+                moviesProfile = null
+                MediaWebView(context)
+            }
+        } else {
+            MediaWebView(context)
+        }
+        configureWebView(wv, BrowserMode.MOVIES)
+        moviesWebView = wv
+        val initial = pendingMoviesUrl ?: Constants.MOVIES_HOME
+        pendingMoviesUrl = null
+        wv.loadUrl(initial)
+        return wv
+    }
+
+    private fun ensureMoviesProfile(): Profile? {
+        if (!WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)) return null
+        return try {
+            ProfileStore.getInstance().getOrCreateProfile(Constants.MOVIE_PROFILE_NAME)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun configureWebView(wv: WebView, mode: BrowserMode) {
         wv.apply {
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -103,7 +184,11 @@ class WebViewManager {
                     isAlgorithmicDarkeningAllowed = false
                 }
             }
-            CookieManager.getInstance().setAcceptThirdPartyCookies(wv, true)
+            if (mode == BrowserMode.MOVIES) {
+                moviesProfile?.cookieManager?.setAcceptThirdPartyCookies(this, true)
+            } else {
+                CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+            }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, false)
             }
@@ -111,7 +196,7 @@ class WebViewManager {
             webViewClient = object : WebViewClient() {
                 override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                     val url = request.url.toString()
-                    if (NavigationBlocker.shouldAllowNavigation(url)) {
+                    if (NavigationBlocker.shouldAllowNavigation(url, allowAll = mode == BrowserMode.MOVIES)) {
                         return false
                     }
                     onNavigationBlocked?.invoke(url)
@@ -142,6 +227,9 @@ class WebViewManager {
                     _canGoBack.value = view.canGoBack()
                     _canGoForward.value = view.canGoForward()
                     onPageLoaded?.invoke(_currentUrl.value, _pageTitle.value)
+                    if (url != null && url.startsWith("http")) {
+                        onPersistablePage?.invoke(mode, url)
+                    }
                 }
 
                 override fun doUpdateVisitedHistory(view: WebView, url: String?, isReload: Boolean) {
@@ -182,7 +270,6 @@ class WebViewManager {
                 setOf("*")
             )
         } catch (_: Exception) { }
-        webView = wv
     }
 
     fun hideCustomView() {
@@ -213,11 +300,11 @@ class WebViewManager {
     }
 
     fun loadUrl(url: String) {
-        webView?.loadUrl(url)
+        activeWebView()?.loadUrl(url)
     }
 
     fun goBack(): Boolean {
-        return webView?.let {
+        return activeWebView()?.let {
             if (it.canGoBack()) {
                 it.goBack()
                 true
@@ -226,7 +313,7 @@ class WebViewManager {
     }
 
     fun goForward(): Boolean {
-        return webView?.let {
+        return activeWebView()?.let {
             if (it.canGoForward()) {
                 it.goForward()
                 true
@@ -235,7 +322,7 @@ class WebViewManager {
     }
 
     fun reload() {
-        webView?.reload()
+        activeWebView()?.reload()
     }
 
     fun scrollVideoIntoView() {
@@ -249,7 +336,7 @@ class WebViewManager {
 
     /**
      * While in PiP, strip the page down to just the video player so the
-     * PiP window doesn't show YouTube's responsive sidebar/header layout.
+     * PiP window doesn't show the page's responsive sidebar/header layout.
      */
     fun setVideoOnlyMode(enabled: Boolean) {
         if (videoOnlyMode == enabled) return
@@ -277,20 +364,23 @@ class WebViewManager {
     }
 
     fun evaluateJs(script: String) {
-        webView?.evaluateJavascript(script, null)
+        activeWebView()?.evaluateJavascript(script, null)
     }
 
     private val mainHandler = Handler(Looper.getMainLooper())
 
     fun evaluateJsFromMainThread(script: String) {
-        mainHandler.post { webView?.evaluateJavascript(script, null) }
+        mainHandler.post { activeWebView()?.evaluateJavascript(script, null) }
     }
 
     fun destroy() {
-        webView?.apply {
-            stopLoading()
-            destroy()
+        listOf(webView, moviesWebView).forEach { wv ->
+            wv?.apply {
+                stopLoading()
+                destroy()
+            }
         }
         webView = null
+        moviesWebView = null
     }
 }

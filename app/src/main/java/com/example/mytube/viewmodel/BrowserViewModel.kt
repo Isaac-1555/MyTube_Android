@@ -4,6 +4,8 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.mytube.MyTubeApplication
+import com.example.mytube.browser.BrowserMode
+import com.example.mytube.util.Constants
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -21,6 +23,34 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     val webViewManager = container.webViewManager
     val playbackManager = container.playbackManager
     val prefsManager = container.prefsManager
+
+    private var ytLastUrlCache: String? = null
+    private var moviesLastUrlCache: String? = null
+
+    fun switchToYoutube() {
+        webViewManager.activate(BrowserMode.YOUTUBE)
+        if (webViewManager.webView == null) {
+            webViewManager.pendingYoutubeUrl = ytLastUrlCache ?: Constants.YOUTUBE_HOME
+        } else {
+            webViewManager.loadUrl(Constants.YOUTUBE_HOME)
+        }
+    }
+
+    fun switchToYoutubeMusic() {
+        webViewManager.activate(BrowserMode.YOUTUBE)
+        if (webViewManager.webView == null) {
+            webViewManager.pendingYoutubeUrl = Constants.YOUTUBE_MUSIC_HOME
+        } else {
+            webViewManager.loadUrl(Constants.YOUTUBE_MUSIC_HOME)
+        }
+    }
+
+    fun switchToMovies() {
+        webViewManager.activate(BrowserMode.MOVIES)
+        if (webViewManager.moviesWebView == null) {
+            webViewManager.pendingMoviesUrl = moviesLastUrlCache ?: Constants.MOVIES_HOME
+        }
+    }
 
     val bgPlaybackEnabled = prefsManager.backgroundPlayback.stateIn(
         viewModelScope, SharingStarted.Eagerly, true
@@ -127,6 +157,24 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         webViewManager.onPageLoaded = { url, _ ->
             injectScripts()
             injectCosmeticCss(url)
+        }
+        webViewManager.onPersistablePage = { mode, url ->
+            when (mode) {
+                BrowserMode.YOUTUBE -> {
+                    ytLastUrlCache = url
+                    viewModelScope.launch { prefsManager.setYoutubeLastUrl(url) }
+                }
+                BrowserMode.MOVIES -> {
+                    moviesLastUrlCache = url
+                    viewModelScope.launch { prefsManager.setMoviesLastUrl(url) }
+                }
+            }
+        }
+        viewModelScope.launch {
+            prefsManager.youtubeLastUrl.collect { ytLastUrlCache = it }
+        }
+        viewModelScope.launch {
+            prefsManager.moviesLastUrl.collect { moviesLastUrlCache = it }
         }
         // Ad domain blocking in WebViewManager.shouldInterceptRequest.
         // Scriptlet handles ad stripping + YouTube internal config disabling.

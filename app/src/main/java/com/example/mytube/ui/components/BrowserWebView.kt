@@ -1,13 +1,10 @@
 package com.example.mytube.ui.components
 
-import android.view.ViewGroup
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.key
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
-import com.example.mytube.browser.MediaWebView
 import com.example.mytube.browser.WebViewManager
 
 @Composable
@@ -16,26 +13,12 @@ fun BrowserWebView(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val webView = remember {
-        webViewManager.webView ?: run {
-            val view = MediaWebView(context).apply {
-                layoutParams = ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT
-                )
-            }
-            webViewManager.attachWebView(view)
-            webViewManager.loadUrl(webViewManager.currentUrl)
-            view
-        }
-    }
-
-    AndroidView(
-        factory = { webView },
-        modifier = modifier
-    )
-
-    DisposableEffect(Unit) {
-        onDispose { }
+    key(webViewManager.activeMode) {
+        AndroidView(
+            factory = {
+                webViewManager.getOrCreateWebView(webViewManager.activeMode, context)
+            },
+            modifier = modifier
+        )
     }
 }
