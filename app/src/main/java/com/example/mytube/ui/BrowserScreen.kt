@@ -146,29 +146,14 @@ fun BrowserScreen(
         }
 
         if (isLocked && !isInPipMode) {
-            if (isFullscreen) {
-                LockOverlay(modifier = Modifier.fillMaxSize())
-                LockChip(
-                    locked = true,
-                    onToggle = { viewModel.toggleLock() },
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(16.dp)
-                )
-            } else {
-                Column(modifier = Modifier.fillMaxSize()) {
-                    LockOverlay(modifier = Modifier.weight(1f))
-                    BottomControls(
-                        sleepTimerRemaining = sleepTimerRemaining,
-                        isLocked = true,
-                        onYoutube = { viewModel.loadUrl("https://youtube.com") },
-                        onYoutubeMusic = { viewModel.loadUrl("https://music.youtube.com") },
-                        onSettings = onSettingsClick,
-                        onSleepTimer = { showSleepTimerSheet = true },
-                        onToggleLock = { viewModel.toggleLock() }
-                    )
-                }
-            }
+            LockOverlay(modifier = Modifier.fillMaxSize())
+            LockChip(
+                locked = true,
+                onToggle = { viewModel.toggleLock() },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(16.dp)
+            )
         } else if (!isLocked && isFullscreen && !isInPipMode) {
             LockChip(
                 locked = false,
@@ -232,7 +217,7 @@ private fun BottomControls(
             Icon(
                 imageVector = if (isLocked) Icons.Default.Lock else Icons.Default.LockOpen,
                 contentDescription = if (isLocked) "Unlock screen" else "Lock screen",
-                tint = if (isLocked) MaterialTheme.colorScheme.primary else Color.Unspecified
+                tint = Color.White
             )
         }
     }
@@ -323,7 +308,7 @@ private fun LockChip(
         Icon(
             imageVector = if (locked) Icons.Default.Lock else Icons.Default.LockOpen,
             contentDescription = if (locked) "Unlock screen" else "Lock screen",
-            tint = MaterialTheme.colorScheme.onSurface
+            tint = Color.White
         )
     }
 }
