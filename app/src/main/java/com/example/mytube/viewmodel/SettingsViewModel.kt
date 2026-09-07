@@ -4,7 +4,6 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.mytube.MyTubeApplication
-import com.example.mytube.data.entity.ScriptEntity
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -20,8 +19,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
     val adblockEnabled: StateFlow<Boolean> = container.prefsManager.adblockEnabled
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
-
-    fun getScripts(): List<ScriptEntity> = container.scriptRepository.getAll()
+    val autoHideBar: StateFlow<Boolean> = container.prefsManager.autoHideBar
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     fun setBackgroundPlayback(enabled: Boolean) {
         viewModelScope.launch { container.prefsManager.setBackgroundPlayback(enabled) }
@@ -35,7 +34,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch { container.prefsManager.setAdblockEnabled(enabled) }
     }
 
-    fun toggleScript(id: String, enabled: Boolean) {
-        container.scriptRepository.setEnabled(id, enabled)
+    fun setAutoHideBar(enabled: Boolean) {
+        viewModelScope.launch { container.prefsManager.setAutoHideBar(enabled) }
     }
 }

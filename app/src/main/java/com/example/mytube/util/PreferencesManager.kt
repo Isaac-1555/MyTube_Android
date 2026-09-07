@@ -17,6 +17,7 @@ class PreferencesManager(private val context: Context) {
         val BG_PLAYBACK = booleanPreferencesKey("bg_playback")
         val AUTO_PIP = booleanPreferencesKey("auto_pip")
         val ADBLOCK_ENABLED = booleanPreferencesKey("adblock_enabled")
+        val AUTO_HIDE_BAR = booleanPreferencesKey("auto_hide_bar")
         val NOTIF_PERM_REQUESTED = booleanPreferencesKey("notif_perm_requested")
         val YOUTUBE_LAST_URL = stringPreferencesKey("youtube_last_url")
         val MOVIES_LAST_URL = stringPreferencesKey("movies_last_url")
@@ -26,6 +27,7 @@ class PreferencesManager(private val context: Context) {
     val backgroundPlayback: Flow<Boolean> = context.dataStore.data.map { it[BG_PLAYBACK] ?: true }
     val autoPip: Flow<Boolean> = context.dataStore.data.map { it[AUTO_PIP] ?: true }
     val adblockEnabled: Flow<Boolean> = context.dataStore.data.map { it[ADBLOCK_ENABLED] ?: true }
+    val autoHideBar: Flow<Boolean> = context.dataStore.data.map { it[AUTO_HIDE_BAR] ?: false }
     val notifPermissionRequested: Flow<Boolean> = context.dataStore.data.map { it[NOTIF_PERM_REQUESTED] ?: false }
     val youtubeLastUrl: Flow<String?> = context.dataStore.data.map { it[YOUTUBE_LAST_URL] }
     val moviesLastUrl: Flow<String?> = context.dataStore.data.map { it[MOVIES_LAST_URL] }
@@ -41,6 +43,10 @@ class PreferencesManager(private val context: Context) {
 
     suspend fun setAdblockEnabled(enabled: Boolean) {
         context.dataStore.edit { it[ADBLOCK_ENABLED] = enabled }
+    }
+
+    suspend fun setAutoHideBar(enabled: Boolean) {
+        context.dataStore.edit { it[AUTO_HIDE_BAR] = enabled }
     }
 
     suspend fun markNotifPermissionRequested() {

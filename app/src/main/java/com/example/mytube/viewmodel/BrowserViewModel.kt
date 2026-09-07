@@ -64,6 +64,10 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope, SharingStarted.Eagerly, true
     )
 
+    val autoHideBar = prefsManager.autoHideBar.stateIn(
+        viewModelScope, SharingStarted.Eagerly, false
+    )
+
     val notifPermissionRequested = prefsManager.notifPermissionRequested.stateIn(
         viewModelScope, SharingStarted.Eagerly, false
     )

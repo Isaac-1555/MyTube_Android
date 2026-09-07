@@ -1,6 +1,11 @@
 package com.example.mytube.ui
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -62,6 +67,7 @@ import com.example.mytube.R
 import com.example.mytube.ui.components.BrowserWebView
 import com.example.mytube.util.Constants
 import com.example.mytube.viewmodel.BrowserViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlin.math.abs
 
@@ -76,10 +82,33 @@ fun BrowserScreen(
     val sleepTimerRemaining by viewModel.sleepTimerRemaining.collectAsState()
     val isLocked by viewModel.isLocked.collectAsState()
     val showExitDialog by viewModel.showExitDialog.collectAsState()
+    val autoHideBar by viewModel.autoHideBar.collectAsState()
     var showSleepTimerSheet by remember { mutableStateOf(false) }
     val isFullscreen = mgr.fullscreenView != null
 
-    Box(modifier = modifier.fillMaxSize()) {
+    var controlsVisible by remember { mutableStateOf(true) }
+    var interactionTick by remember { mutableStateOf(0) }
+
+    LaunchedEffect(autoHideBar, interactionTick) {
+        if (!autoHideBar) {
+            controlsVisible = true
+        } else {
+            delay(BOTTOM_BAR_HIDE_DELAY_MS)
+            controlsVisible = false
+        }
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    controlsVisible = true
+                    interactionTick++
+                }
+            }
+    ) {
         Column(modifier = Modifier.fillMaxSize()) {
             if (!isInPipMode) {
                 AnimatedVisibility(visible = mgr.isLoading) {
@@ -111,18 +140,24 @@ fun BrowserScreen(
             }
 
             if (!isInPipMode) {
-                BottomControls(
-                    sleepTimerRemaining = sleepTimerRemaining,
-                    isLocked = isLocked,
-                    onReload = { viewModel.reload() },
-                    onYoutube = { viewModel.switchToYoutube() },
-                    onYoutubeMusic = { viewModel.switchToYoutubeMusic() },
-                    onMovies = { viewModel.switchToMovies() },
-                    onAnime = { viewModel.switchToAnime() },
-                    onSettings = onSettingsClick,
-                    onSleepTimer = { showSleepTimerSheet = true },
-                    onToggleLock = { viewModel.toggleLock() }
-                )
+                AnimatedVisibility(
+                    visible = controlsVisible,
+                    enter = fadeIn(tween(200)) + expandVertically(expandFrom = Alignment.Bottom),
+                    exit = fadeOut(tween(200)) + shrinkVertically(shrinkTowards = Alignment.Bottom)
+                ) {
+                    BottomControls(
+                        sleepTimerRemaining = sleepTimerRemaining,
+                        isLocked = isLocked,
+                        onReload = { viewModel.reload() },
+                        onYoutube = { viewModel.switchToYoutube() },
+                        onYoutubeMusic = { viewModel.switchToYoutubeMusic() },
+                        onMovies = { viewModel.switchToMovies() },
+                        onAnime = { viewModel.switchToAnime() },
+                        onSettings = onSettingsClick,
+                        onSleepTimer = { showSleepTimerSheet = true },
+                        onToggleLock = { viewModel.toggleLock() }
+                    )
+                }
             }
         }
 
@@ -461,6 +496,8 @@ private fun MinuteWheel(
         }
     }
 }
+
+private const val BOTTOM_BAR_HIDE_DELAY_MS = 5_000L
 
 private fun formatRemaining(ms: Long): String {
     val totalSeconds = (ms + 999) / 1000
