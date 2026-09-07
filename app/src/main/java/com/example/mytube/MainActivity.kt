@@ -101,11 +101,13 @@ class MainActivity : ComponentActivity() {
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         isInPipMode = isInPictureInPictureMode
+        browserViewModel.webViewManager.setVideoOnlyMode(isInPictureInPictureMode)
     }
 
     override fun onResume() {
         super.onResume()
         browserViewModel.playbackManager.setAppInForeground(true)
+        browserViewModel.webViewManager.setVideoOnlyMode(false)
         browserViewModel.webViewManager.evaluateJs("window.setBackgroundMode && window.setBackgroundMode(false)")
         maybeRequestNotificationPermission()
     }
@@ -129,6 +131,7 @@ class MainActivity : ComponentActivity() {
         if (wantsPip) {
             if (!wm.isFullscreen) {
                 wm.scrollVideoIntoView()
+                wm.setVideoOnlyMode(true)
             }
             val params = PictureInPictureParams.Builder()
                 .setAspectRatio(Rational(Constants.PIP_RATIO_WIDTH, Constants.PIP_RATIO_HEIGHT))

@@ -245,6 +245,37 @@ class WebViewManager {
         )
     }
 
+    private var videoOnlyMode = false
+
+    /**
+     * While in PiP, strip the page down to just the video player so the
+     * PiP window doesn't show YouTube's responsive sidebar/header layout.
+     */
+    fun setVideoOnlyMode(enabled: Boolean) {
+        if (videoOnlyMode == enabled) return
+        videoOnlyMode = enabled
+        if (enabled) {
+            evaluateJs(
+                "(function(){if(!document.querySelector('video'))return;" +
+                    "var s=document.getElementById('mytube-pip-video-only');" +
+                    "if(!s){s=document.createElement('style');" +
+                    "s.id='mytube-pip-video-only';" +
+                    "document.documentElement.appendChild(s);}" +
+                    "s.textContent='html,body{background:#000!important;overflow:hidden!important}" +
+                    "body *{visibility:hidden!important}" +
+                    "video,.html5-video-player,.html5-video-player *{visibility:visible!important}" +
+                    ".html5-video-player{position:fixed!important;top:0!important;left:0!important;" +
+                    "width:100vw!important;height:100vh!important;z-index:2147483647!important;" +
+                    "background:#000!important}';})()"
+            )
+        } else {
+            evaluateJs(
+                "(function(){var s=document.getElementById('mytube-pip-video-only');" +
+                    "if(s&&s.parentNode){s.parentNode.removeChild(s);}})()"
+            )
+        }
+    }
+
     fun evaluateJs(script: String) {
         webView?.evaluateJavascript(script, null)
     }
