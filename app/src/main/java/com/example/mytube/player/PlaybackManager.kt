@@ -43,7 +43,15 @@ class PlaybackManager(private val context: Context) {
         ContextCompat.startForegroundService(context, intent)
     }
     
-    fun updateMetadata(playing: Boolean, title: String, duration: Double, position: Double) {
+    fun updateMetadata(
+        playing: Boolean,
+        title: String,
+        duration: Double,
+        position: Double,
+        artUrl: String? = null,
+        hasNext: Boolean = false,
+        hasPrev: Boolean = false
+    ) {
         isPlaying = playing
         if (playing) {
             startService()
@@ -56,6 +64,23 @@ class PlaybackManager(private val context: Context) {
             putExtra("title", title)
             putExtra("duration", (duration * 1000).toLong())
             putExtra("position", (position * 1000).toLong())
+            putExtra("artUrl", artUrl)
+            putExtra("hasNext", hasNext)
+            putExtra("hasPrev", hasPrev)
+        }
+        ContextCompat.startForegroundService(context, intent)
+    }
+
+    fun skipNext() {
+        val intent = Intent(context, PlaybackService::class.java).apply {
+            action = PlaybackService.ACTION_SKIP_NEXT
+        }
+        ContextCompat.startForegroundService(context, intent)
+    }
+
+    fun skipPrevious() {
+        val intent = Intent(context, PlaybackService::class.java).apply {
+            action = PlaybackService.ACTION_SKIP_PREV
         }
         ContextCompat.startForegroundService(context, intent)
     }

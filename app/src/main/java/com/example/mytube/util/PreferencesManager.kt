@@ -22,6 +22,10 @@ class PreferencesManager(private val context: Context) {
         val YOUTUBE_LAST_URL = stringPreferencesKey("youtube_last_url")
         val MOVIES_LAST_URL = stringPreferencesKey("movies_last_url")
         val ANIME_LAST_URL = stringPreferencesKey("anime_last_url")
+        val MOVIES_SOURCE_URL = stringPreferencesKey("movies_source_url")
+        val ANIME_SOURCE_URL = stringPreferencesKey("anime_source_url")
+        val REMOTE_MOVIES_HOME = stringPreferencesKey("remote_movies_home")
+        val REMOTE_ANIME_HOME = stringPreferencesKey("remote_anime_home")
     }
 
     val backgroundPlayback: Flow<Boolean> = context.dataStore.data.map { it[BG_PLAYBACK] ?: true }
@@ -32,6 +36,11 @@ class PreferencesManager(private val context: Context) {
     val youtubeLastUrl: Flow<String?> = context.dataStore.data.map { it[YOUTUBE_LAST_URL] }
     val moviesLastUrl: Flow<String?> = context.dataStore.data.map { it[MOVIES_LAST_URL] }
     val animeLastUrl: Flow<String?> = context.dataStore.data.map { it[ANIME_LAST_URL] }
+
+    val moviesSourceUrl: Flow<String?> = context.dataStore.data.map { it[MOVIES_SOURCE_URL] }
+    val animeSourceUrl: Flow<String?> = context.dataStore.data.map { it[ANIME_SOURCE_URL] }
+    val remoteMoviesHome: Flow<String?> = context.dataStore.data.map { it[REMOTE_MOVIES_HOME] }
+    val remoteAnimeHome: Flow<String?> = context.dataStore.data.map { it[REMOTE_ANIME_HOME] }
 
     suspend fun setBackgroundPlayback(enabled: Boolean) {
         context.dataStore.edit { it[BG_PLAYBACK] = enabled }
@@ -63,5 +72,24 @@ class PreferencesManager(private val context: Context) {
 
     suspend fun setAnimeLastUrl(url: String) {
         context.dataStore.edit { it[ANIME_LAST_URL] = url }
+    }
+
+    suspend fun setMoviesSourceUrl(url: String?) {
+        context.dataStore.edit {
+            if (url.isNullOrBlank()) it.remove(MOVIES_SOURCE_URL) else it[MOVIES_SOURCE_URL] = url.trim()
+        }
+    }
+
+    suspend fun setAnimeSourceUrl(url: String?) {
+        context.dataStore.edit {
+            if (url.isNullOrBlank()) it.remove(ANIME_SOURCE_URL) else it[ANIME_SOURCE_URL] = url.trim()
+        }
+    }
+
+    suspend fun setRemoteHomes(movies: String?, anime: String?) {
+        context.dataStore.edit { prefs ->
+            if (!movies.isNullOrBlank()) prefs[REMOTE_MOVIES_HOME] = movies.trim()
+            if (!anime.isNullOrBlank()) prefs[REMOTE_ANIME_HOME] = anime.trim()
+        }
     }
 }

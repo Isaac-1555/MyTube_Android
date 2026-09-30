@@ -57,6 +57,65 @@
         reportState();
     };
 
+    function findNextButton() {
+        return document.querySelector('.ytp-next-button') ||
+            document.querySelector('ytmusic-player-bar .next-button') ||
+            document.querySelector('.next-button') ||
+            document.querySelector('button[aria-label="Next"]') ||
+            document.querySelector('button[title="Next"]');
+    }
+
+    function findPrevButton() {
+        return document.querySelector('.ytp-prev-button') ||
+            document.querySelector('ytmusic-player-bar .previous-button') ||
+            document.querySelector('.previous-button') ||
+            document.querySelector('button[aria-label="Previous"]') ||
+            document.querySelector('button[title="Previous"]');
+    }
+
+    function hasNext() { return !!findNextButton(); }
+    function hasPrev() { return !!findPrevButton(); }
+
+    window.MyTubeNext = function() {
+        var b = findNextButton();
+        if (b) { b.click(); return; }
+        try {
+            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'MediaTrackNext', bubbles: true }));
+        } catch (e) {}
+    };
+
+    window.MyTubePrev = function() {
+        var b = findPrevButton();
+        if (b) { b.click(); return; }
+        try {
+            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'MediaTrackPrevious', bubbles: true }));
+        } catch (e) {}
+    };
+
+    function ytVideoId() {
+        var m = location.href.match(/[?&]v=([A-Za-z0-9_-]{6,})/);
+        if (m) return m[1];
+        var p = location.pathname.match(/^\/(?:shorts|embed|live)\/([A-Za-z0-9_-]{6,})/);
+        if (p) return p[1];
+        return '';
+    }
+
+    function getArtUrl() {
+        var v = document.querySelector('video');
+        if (v && v.poster) return v.poster;
+        var id = ytVideoId();
+        if (id) return 'https://i.ytimg.com/vi/' + id + '/hqdefault.jpg';
+        var og = document.querySelector('meta[property="og:image"]');
+        if (og && og.content) return og.content;
+        var img = document.querySelector('ytmusic-player-bar img, .ytp-cued-thumbnail-overlay-image');
+        var src = img && (img.src || (img.style && img.style.backgroundImage));
+        if (src) {
+            var clean = src.replace(/^url\(["']?/, '').replace(/["']?\)$/, '');
+            if (clean.indexOf('http') === 0) return clean;
+        }
+        return '';
+    }
+
     function shouldResume(v) {
         return window.MyTubeBgMode && !window.MyTubeUserPaused && !v.ended && v.currentTime > 0 && v.paused;
     }
@@ -70,10 +129,14 @@
         var v = document.querySelector('video');
         if (!v || !window.Android) return;
         var title = document.title.replace(/^(\(\d+\)\s+)?/, '').replace(' - YouTube', '');
-        var key = (!!v.paused) + '|' + title + '|' + (v.duration | 0) + '|' + Math.floor(v.currentTime / 10);
+        var artUrl = getArtUrl();
+        var canNext = hasNext();
+        var canPrev = hasPrev();
+        var key = (!!v.paused) + '|' + title + '|' + (v.duration | 0) + '|' + Math.floor(v.currentTime / 10) +
+            '|' + artUrl + '|' + canNext + '|' + canPrev;
         if (key === lastReportKey) return;
         lastReportKey = key;
-        window.Android.onPlaybackStateChanged(!v.paused, title, v.duration || 0, v.currentTime || 0);
+        window.Android.onPlaybackStateChanged(!v.paused, title, v.duration || 0, v.currentTime || 0, artUrl, canNext, canPrev);
     }
 
     var lastVideo = null;

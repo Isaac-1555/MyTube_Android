@@ -9,6 +9,7 @@ import com.example.mytube.injection.ScriptManager
 import com.example.mytube.injection.ScriptRepository
 import com.example.mytube.player.PlaybackManager
 import com.example.mytube.util.PreferencesManager
+import com.example.mytube.util.SourceConfigRepository
 
 class AppContainer(context: Context) {
     private val db = LocalDatabase(context)
@@ -20,4 +21,5 @@ class AppContainer(context: Context) {
     val adBlockManager = AdBlockManager(filterListUpdater)
     val scriptManager = ScriptManager(context, scriptRepository)
     val playbackManager = PlaybackManager(context)
+    val sourceConfig = SourceConfigRepository(context, prefsManager)
 }

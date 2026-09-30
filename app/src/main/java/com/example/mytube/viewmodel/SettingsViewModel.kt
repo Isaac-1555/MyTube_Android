@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.mytube.MyTubeApplication
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -21,6 +22,17 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
     val autoHideBar: StateFlow<Boolean> = container.prefsManager.autoHideBar
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    val moviesSourceUrl: Flow<String?> = container.prefsManager.moviesSourceUrl
+    val animeSourceUrl: Flow<String?> = container.prefsManager.animeSourceUrl
+
+    fun setMoviesSourceUrl(url: String?) {
+        viewModelScope.launch { container.prefsManager.setMoviesSourceUrl(url) }
+    }
+
+    fun setAnimeSourceUrl(url: String?) {
+        viewModelScope.launch { container.prefsManager.setAnimeSourceUrl(url) }
+    }
 
     fun setBackgroundPlayback(enabled: Boolean) {
         viewModelScope.launch { container.prefsManager.setBackgroundPlayback(enabled) }

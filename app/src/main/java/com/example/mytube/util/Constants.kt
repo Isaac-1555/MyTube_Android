@@ -11,10 +11,18 @@ object Constants {
     const val YOUTUBE_SHORT = "youtu.be"
     const val YOUTUBE_HOME = "https://www.youtube.com"
     const val YOUTUBE_MUSIC_HOME = "https://music.youtube.com"
-    const val MOVIES_HOME = "https://cinehd.vc"
+    const val MOVIES_HOME = "https://cinehd.gd"
     const val MOVIE_PROFILE_NAME = "movies"
     const val ANIME_HOME = "https://hianime.lol/home"
     const val ANIME_PROFILE_NAME = "anime"
+    const val SOURCES_CONFIG_URL =
+        "https://raw.githubusercontent.com/Isaac-1555/MyTube_Android/main/config/sources.json"
+    val DEAD_MOVIE_HOSTS = setOf(
+        "cinehd.vc",
+        "www.cinehd.vc",
+        "cinehd.cc",
+        "www.cinehd.cc",
+    )
     const val PIP_RATIO_WIDTH = 16
     const val PIP_RATIO_HEIGHT = 9
     const val SWIPE_EDGE_WIDTH_DP = 24

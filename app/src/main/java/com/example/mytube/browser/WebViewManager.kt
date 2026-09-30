@@ -94,9 +94,10 @@ class WebViewManager {
 
     var onPageLoaded: ((String, String) -> Unit)? = null
     var onPersistablePage: ((BrowserMode, String) -> Unit)? = null
+    var homeResolver: ((BrowserMode) -> String?)? = null
     var onNavigationBlocked: ((String) -> Unit)? = null
     var shouldIntercept: ((String) -> WebResourceResponse?)? = null
-    var onPlaybackUpdate: ((Boolean, String, Double, Double) -> Unit)? = null
+    var onPlaybackUpdate: ((Boolean, String, Double, Double, String?, Boolean, Boolean) -> Unit)? = null
     var networkBlocker: ((String) -> Boolean)? = null
 
     private var customView: View? = null
@@ -112,8 +113,16 @@ class WebViewManager {
 
     private inner class PlaybackBridge {
         @JavascriptInterface
-        fun onPlaybackStateChanged(playing: Boolean, title: String, duration: Double, currentTime: Double) {
-            onPlaybackUpdate?.invoke(playing, title, duration, currentTime)
+        fun onPlaybackStateChanged(
+            playing: Boolean,
+            title: String,
+            duration: Double,
+            currentTime: Double,
+            artUrl: String?,
+            canNext: Boolean,
+            canPrev: Boolean
+        ) {
+            onPlaybackUpdate?.invoke(playing, title, duration, currentTime, artUrl, canNext, canPrev)
         }
     }
 
@@ -138,7 +147,9 @@ class WebViewManager {
     private fun createMoviesWebView(context: Context): WebView {
         val wv = createProfiledWebView(BrowserMode.MOVIES, Constants.MOVIE_PROFILE_NAME, context)
         moviesWebView = wv
-        val initial = pendingMoviesUrl ?: Constants.MOVIES_HOME
+        val initial = pendingMoviesUrl
+            ?: homeResolver?.invoke(BrowserMode.MOVIES)
+            ?: Constants.MOVIES_HOME
         pendingMoviesUrl = null
         wv.loadUrl(initial)
         return wv
@@ -147,7 +158,9 @@ class WebViewManager {
     private fun createAnimeWebView(context: Context): WebView {
         val wv = createProfiledWebView(BrowserMode.ANIME, Constants.ANIME_PROFILE_NAME, context)
         animeWebView = wv
-        val initial = pendingAnimeUrl ?: Constants.ANIME_HOME
+        val initial = pendingAnimeUrl
+            ?: homeResolver?.invoke(BrowserMode.ANIME)
+            ?: Constants.ANIME_HOME
         pendingAnimeUrl = null
         wv.loadUrl(initial)
         return wv
@@ -245,6 +258,7 @@ class WebViewManager {
                 override fun onPageFinished(view: WebView, url: String?) {
                     super.onPageFinished(view, url)
                     if (url != null) _currentUrl.value = url
+                    if (url != null && redirectIfDeadMirror(view, mode, url)) return
                     _isLoading.value = false
                     _canGoBack.value = view.canGoBack()
                     _canGoForward.value = view.canGoForward()
@@ -303,6 +317,22 @@ class WebViewManager {
 
     companion object {
         private const val TAG = "WebViewManager"
+    }
+
+    /**
+     * The movie/anime mirrors rotate and get seized constantly. When a page loads
+     * on a known-dead host, bounce to the currently resolved home instead of
+     * showing the mirror's own "Page not found" route.
+     */
+    private fun redirectIfDeadMirror(view: WebView, mode: BrowserMode, url: String): Boolean {
+        if (mode == BrowserMode.YOUTUBE) return false
+        val host = runCatching { java.net.URI(url).host }.getOrNull()?.lowercase() ?: return false
+        if (host !in Constants.DEAD_MOVIE_HOSTS) return false
+        val home = homeResolver?.invoke(mode)?.takeIf { it.isNotBlank() } ?: return false
+        if (url.startsWith(home)) return false
+        _isLoading.value = false
+        view.loadUrl(home)
+        return true
     }
 
     private fun blockAdDomain(url: String): WebResourceResponse? {

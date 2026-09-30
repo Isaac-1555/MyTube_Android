@@ -27,6 +27,8 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     private var ytLastUrlCache: String? = null
     private var moviesLastUrlCache: String? = null
     private var animeLastUrlCache: String? = null
+    private var moviesHomeCache: String = Constants.MOVIES_HOME
+    private var animeHomeCache: String = Constants.ANIME_HOME
 
     fun switchToYoutube() {
         webViewManager.activate(BrowserMode.YOUTUBE)
@@ -49,14 +51,14 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     fun switchToMovies() {
         webViewManager.activate(BrowserMode.MOVIES)
         if (webViewManager.moviesWebView == null) {
-            webViewManager.pendingMoviesUrl = moviesLastUrlCache ?: Constants.MOVIES_HOME
+            webViewManager.pendingMoviesUrl = moviesLastUrlCache ?: moviesHomeCache
         }
     }
 
     fun switchToAnime() {
         webViewManager.activate(BrowserMode.ANIME)
         if (webViewManager.animeWebView == null) {
-            webViewManager.pendingAnimeUrl = animeLastUrlCache ?: Constants.ANIME_HOME
+            webViewManager.pendingAnimeUrl = animeLastUrlCache ?: animeHomeCache
         }
     }
 
@@ -146,9 +148,9 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
         playbackManager.jsEvaluator = { webViewManager.evaluateJsFromMainThread(it) }
         webViewManager.networkBlocker = { container.adBlockManager.shouldBlock(it) }
-        webViewManager.onPlaybackUpdate = { playing, title, duration, position ->
+        webViewManager.onPlaybackUpdate = { playing, title, duration, position, artUrl, hasNext, hasPrev ->
             if (bgPlaybackEnabled.value) {
-                playbackManager.updateMetadata(playing, title, duration, position)
+                playbackManager.updateMetadata(playing, title, duration, position, artUrl, hasNext, hasPrev)
             } else if (!playing) {
                 playbackManager.stopService()
             }
@@ -194,6 +196,20 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         }
         viewModelScope.launch {
             prefsManager.animeLastUrl.collect { animeLastUrlCache = it }
+        }
+        viewModelScope.launch {
+            container.sourceConfig.moviesHome.collect { moviesHomeCache = it }
+        }
+        viewModelScope.launch {
+            container.sourceConfig.animeHome.collect { animeHomeCache = it }
+        }
+        viewModelScope.launch { container.sourceConfig.refresh() }
+        webViewManager.homeResolver = { mode ->
+            when (mode) {
+                BrowserMode.MOVIES -> moviesHomeCache
+                BrowserMode.ANIME -> animeHomeCache
+                BrowserMode.YOUTUBE -> null
+            }
         }
         // Ad domain blocking in WebViewManager.shouldInterceptRequest.
         // Scriptlet handles ad stripping + YouTube internal config disabling.
