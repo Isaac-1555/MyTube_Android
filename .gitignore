@@ -13,3 +13,9 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Signing
+mytube-release.jks
+keystore.properties
+*.jks
+*.keystore
