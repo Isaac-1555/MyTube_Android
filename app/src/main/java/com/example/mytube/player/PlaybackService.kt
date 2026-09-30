@@ -10,6 +10,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.AudioManager
 import android.os.Build
+import android.os.Bundle
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
@@ -63,6 +64,8 @@ class PlaybackService : Service() {
     private var lastNotifiedDuration = -1L
     private var lastNotifiedPlaying = false
     private var lastNotifiedArtUrl: String? = null
+    private var lastNotifiedHasNext = false
+    private var lastNotifiedHasPrev = false
 
     private val noisyReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -140,10 +143,14 @@ class PlaybackService : Service() {
                 val notifyChanged = currentTitle != lastNotifiedTitle ||
                     currentDuration != lastNotifiedDuration ||
                     isPlaying != lastNotifiedPlaying ||
-                    artChanged
+                    artChanged ||
+                    hasNext != lastNotifiedHasNext ||
+                    hasPrev != lastNotifiedHasPrev
                 lastNotifiedTitle = currentTitle
                 lastNotifiedDuration = currentDuration
                 lastNotifiedPlaying = isPlaying
+                lastNotifiedHasNext = hasNext
+                lastNotifiedHasPrev = hasPrev
                 if (notifyChanged) startWithNotification()
                 val appForeground = (application as? MyTubeApplication)?.container?.playbackManager?.isAppForeground != false
                 if (isPlaying) {
@@ -213,6 +220,8 @@ class PlaybackService : Service() {
             .putString(MediaMetadataCompat.METADATA_KEY_TITLE, currentTitle)
             .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, currentDuration)
         artBitmap?.let {
+            // METADATA_KEY_ART drives the SystemUI media card tint on Android 13+.
+            builder.putBitmap(MediaMetadataCompat.METADATA_KEY_ART, it)
             builder.putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, it)
             builder.putBitmap(MediaMetadataCompat.METADATA_KEY_DISPLAY_ICON, it)
         }
@@ -375,9 +384,15 @@ class PlaybackService : Service() {
             PlaybackStateCompat.Builder()
                 .setState(state, currentPosition, 1f)
                 .setActions(skipActions())
+                .addCustomAction(stopCustomAction())
                 .build()
         )
     }
+
+    private fun stopCustomAction(): PlaybackStateCompat.CustomAction =
+        PlaybackStateCompat.CustomAction.Builder(
+            ACTION_CUSTOM_STOP, "Stop", R.drawable.ic_media_stop
+        ).build()
 
     private fun acquireWakeLock() {
         wakeLock?.let {
@@ -448,6 +463,10 @@ class PlaybackService : Service() {
             evaluateJs("window.MyTubePrev && window.MyTubePrev()")
         }
 
+        override fun onCustomAction(action: String?, extras: Bundle?) {
+            if (action == ACTION_CUSTOM_STOP) stop()
+        }
+
         override fun onStop() {
             stop()
         }
@@ -460,6 +479,7 @@ class PlaybackService : Service() {
         const val ACTION_STOP = "com.example.mytube.action.STOP"
         const val ACTION_SKIP_NEXT = "com.example.mytube.action.SKIP_NEXT"
         const val ACTION_SKIP_PREV = "com.example.mytube.action.SKIP_PREV"
+        const val ACTION_CUSTOM_STOP = "com.example.mytube.action.CUSTOM_STOP"
         private const val HEARTBEAT_INTERVAL_MS = 2000L
         private const val BG_PAUSE_TIMEOUT_MS = 60_000L
         private const val ART_TIMEOUT_MS = 8000

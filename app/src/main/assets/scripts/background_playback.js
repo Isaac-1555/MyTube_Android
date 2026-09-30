@@ -57,6 +57,70 @@
         reportState();
     };
 
+    function isYtMusic() { return location.hostname === 'music.youtube.com'; }
+
+    function isYouTube() {
+        return /(^|\.)youtube\.com$/.test(location.hostname) && !isYtMusic();
+    }
+
+    // Internal watch history, so "previous" works on the mobile SPA where the
+    // browser history may span pages rather than videos.
+    var vidStack = [];
+    function pushCurrentVideo() {
+        var id = ytVideoId();
+        if (!id) return;
+        if (vidStack[vidStack.length - 1] !== id) {
+            vidStack.push(id);
+            if (vidStack.length > 50) vidStack.shift();
+        }
+    }
+    function popPreviousVideo() {
+        if (vidStack.length >= 2) {
+            vidStack.pop();
+            return vidStack[vidStack.length - 1] || '';
+        }
+        return '';
+    }
+
+    // First playable video id in the page's initial data (mobile + desktop).
+    function nextVideoIdFromData() {
+        var data = window.ytInitialData;
+        if (!data) return '';
+        var target = data;
+        try {
+            var c = data.contents || {};
+            target =
+                (c.twoColumnWatchNextResults && c.twoColumnWatchNextResults.playlist && c.twoColumnWatchNextResults.playlist.playlist) ||
+                (c.singleColumnWatchNextResults && c.singleColumnWatchNextResults.playlist && c.singleColumnWatchNextResults.playlist.playlist) ||
+                (c.twoColumnWatchNextResults && c.twoColumnWatchNextResults.secondaryResults && c.twoColumnWatchNextResults.secondaryResults.secondaryResults) ||
+                (c.singleColumnWatchNextResults && c.singleColumnWatchNextResults.results && c.singleColumnWatchNextResults.results.results) ||
+                c;
+        } catch (e) { target = data; }
+        var current = ytVideoId();
+        var found = '';
+        (function walk(node) {
+            if (found || !node || typeof node !== 'object') return;
+            var renderer = node.playlistPanelVideoRenderer || node.compactVideoRenderer || node.videoRenderer;
+            if (renderer && renderer.videoId && renderer.videoId !== current) {
+                found = renderer.videoId;
+                return;
+            }
+            for (var k in node) {
+                if (Object.prototype.hasOwnProperty.call(node, k)) {
+                    walk(node[k]);
+                    if (found) return;
+                }
+            }
+        })(target);
+        return found;
+    }
+
+    function goToVideo(id) {
+        if (!id) return false;
+        location.assign('/watch?v=' + id);
+        return true;
+    }
+
     function findNextButton() {
         return document.querySelector('.ytp-next-button') ||
             document.querySelector('ytmusic-player-bar .next-button') ||
@@ -73,20 +137,43 @@
             document.querySelector('button[title="Previous"]');
     }
 
-    function hasNext() { return !!findNextButton(); }
-    function hasPrev() { return !!findPrevButton(); }
+    function player() {
+        var p = document.getElementById('movie_player');
+        if (p && (typeof p.nextVideo === 'function' || typeof p.previousVideo === 'function')) return p;
+        return null;
+    }
+
+    function hasNext() {
+        if (isYouTube() || isYtMusic()) return true;
+        return !!findNextButton();
+    }
+
+    function hasPrev() {
+        if (isYtMusic()) return !!findPrevButton();
+        if (isYouTube()) {
+            var p = player();
+            return !!(p && typeof p.previousVideo === 'function') || vidStack.length > 1;
+        }
+        return !!findPrevButton();
+    }
 
     window.MyTubeNext = function() {
+        var p = player();
+        if (p && typeof p.nextVideo === 'function') { p.nextVideo(); return; }
         var b = findNextButton();
         if (b) { b.click(); return; }
+        if (isYouTube() && goToVideo(nextVideoIdFromData())) return;
         try {
             document.dispatchEvent(new KeyboardEvent('keydown', { key: 'MediaTrackNext', bubbles: true }));
         } catch (e) {}
     };
 
     window.MyTubePrev = function() {
+        var p = player();
+        if (p && typeof p.previousVideo === 'function') { p.previousVideo(); return; }
         var b = findPrevButton();
         if (b) { b.click(); return; }
+        if (isYouTube() && goToVideo(popPreviousVideo())) return;
         try {
             document.dispatchEvent(new KeyboardEvent('keydown', { key: 'MediaTrackPrevious', bubbles: true }));
         } catch (e) {}
@@ -100,19 +187,27 @@
         return '';
     }
 
+    function absoluteUrl(u) {
+        if (!u) return '';
+        u = ('' + u).trim();
+        if (u.indexOf('//') === 0) u = location.protocol + u;
+        if (u.indexOf('http://') !== 0 && u.indexOf('https://') !== 0) return '';
+        return u;
+    }
+
     function getArtUrl() {
-        var v = document.querySelector('video');
-        if (v && v.poster) return v.poster;
         var id = ytVideoId();
         if (id) return 'https://i.ytimg.com/vi/' + id + '/hqdefault.jpg';
-        var og = document.querySelector('meta[property="og:image"]');
-        if (og && og.content) return og.content;
         var img = document.querySelector('ytmusic-player-bar img, .ytp-cued-thumbnail-overlay-image');
         var src = img && (img.src || (img.style && img.style.backgroundImage));
         if (src) {
-            var clean = src.replace(/^url\(["']?/, '').replace(/["']?\)$/, '');
-            if (clean.indexOf('http') === 0) return clean;
+            var clean = absoluteUrl(src.replace(/^url\(["']?/, '').replace(/["']?\)$/, ''));
+            if (clean) return clean;
         }
+        var og = document.querySelector('meta[property="og:image"]');
+        if (og && absoluteUrl(og.content)) return absoluteUrl(og.content);
+        var v = document.querySelector('video');
+        if (v && absoluteUrl(v.poster)) return absoluteUrl(v.poster);
         return '';
     }
 
@@ -128,6 +223,7 @@
     function reportState() {
         var v = document.querySelector('video');
         if (!v || !window.Android) return;
+        pushCurrentVideo();
         var title = document.title.replace(/^(\(\d+\)\s+)?/, '').replace(' - YouTube', '');
         var artUrl = getArtUrl();
         var canNext = hasNext();
