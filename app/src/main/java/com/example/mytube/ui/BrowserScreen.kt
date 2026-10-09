@@ -55,7 +55,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.platform.LocalDensity
@@ -267,8 +266,7 @@ private fun BottomControls(
         IconButton(onClick = onToggleLock) {
             Icon(
                 imageVector = if (isLocked) Icons.Default.Lock else Icons.Default.LockOpen,
-                contentDescription = if (isLocked) "Unlock screen" else "Lock screen",
-                tint = Color.White
+                contentDescription = if (isLocked) "Unlock screen" else "Lock screen"
             )
         }
     }
@@ -359,7 +357,7 @@ private fun LockChip(
         Icon(
             imageVector = if (locked) Icons.Default.Lock else Icons.Default.LockOpen,
             contentDescription = if (locked) "Unlock screen" else "Lock screen",
-            tint = Color.White
+            tint = MaterialTheme.colorScheme.onSurface
         )
     }
 }
