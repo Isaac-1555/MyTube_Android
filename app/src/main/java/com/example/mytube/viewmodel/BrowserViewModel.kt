@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.mytube.MyTubeApplication
 import com.example.mytube.browser.BrowserMode
+import com.example.mytube.browser.isYoutubeFamily
 import com.example.mytube.util.Constants
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -25,6 +26,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     val prefsManager = container.prefsManager
 
     private var ytLastUrlCache: String? = null
+    private var musicLastUrlCache: String? = null
     private var moviesLastUrlCache: String? = null
     private var animeLastUrlCache: String? = null
     private var moviesHomeCache: String = Constants.MOVIES_HOME
@@ -34,17 +36,13 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         webViewManager.activate(BrowserMode.YOUTUBE)
         if (webViewManager.webView == null) {
             webViewManager.pendingYoutubeUrl = ytLastUrlCache ?: Constants.YOUTUBE_HOME
-        } else {
-            webViewManager.loadUrl(Constants.YOUTUBE_HOME)
         }
     }
 
     fun switchToYoutubeMusic() {
-        webViewManager.activate(BrowserMode.YOUTUBE)
-        if (webViewManager.webView == null) {
-            webViewManager.pendingYoutubeUrl = Constants.YOUTUBE_MUSIC_HOME
-        } else {
-            webViewManager.loadUrl(Constants.YOUTUBE_MUSIC_HOME)
+        webViewManager.activate(BrowserMode.MUSIC)
+        if (webViewManager.musicWebView == null) {
+            webViewManager.pendingMusicUrl = musicLastUrlCache ?: Constants.YOUTUBE_MUSIC_HOME
         }
     }
 
@@ -144,7 +142,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         // on the very first frame, before the async filter-list work finishes.
         abm.loadBundled()
         webViewManager.documentStartScriptProvider = { mode ->
-            abm.documentStartScript(forYoutube = mode == BrowserMode.YOUTUBE)
+            abm.documentStartScript(forYoutube = mode.isYoutubeFamily)
         }
         if (container.filterListUpdater.hasCached()) {
             viewModelScope.launch(Dispatchers.Default) { abm.loadCached() }
@@ -188,6 +186,10 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                     ytLastUrlCache = url
                     viewModelScope.launch { prefsManager.setYoutubeLastUrl(url) }
                 }
+                BrowserMode.MUSIC -> {
+                    musicLastUrlCache = url
+                    viewModelScope.launch { prefsManager.setYoutubeMusicLastUrl(url) }
+                }
                 BrowserMode.MOVIES -> {
                     moviesLastUrlCache = url
                     viewModelScope.launch { prefsManager.setMoviesLastUrl(url) }
@@ -200,6 +202,9 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         }
         viewModelScope.launch {
             prefsManager.youtubeLastUrl.collect { ytLastUrlCache = it }
+        }
+        viewModelScope.launch {
+            prefsManager.youtubeMusicLastUrl.collect { musicLastUrlCache = it }
         }
         viewModelScope.launch {
             prefsManager.moviesLastUrl.collect { moviesLastUrlCache = it }
@@ -219,6 +224,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                 BrowserMode.MOVIES -> moviesHomeCache
                 BrowserMode.ANIME -> animeHomeCache
                 BrowserMode.YOUTUBE -> null
+                BrowserMode.MUSIC -> null
             }
         }
         // Ad domain blocking in WebViewManager.shouldInterceptRequest.

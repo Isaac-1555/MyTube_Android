@@ -34,10 +34,17 @@ import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
 
-enum class BrowserMode { YOUTUBE, MOVIES, ANIME }
+enum class BrowserMode { YOUTUBE, MUSIC, MOVIES, ANIME }
+
+/** True for the tabs that browse the YouTube/Google account (YouTube + YouTube Music). */
+val BrowserMode.isYoutubeFamily: Boolean
+    get() = this == BrowserMode.YOUTUBE || this == BrowserMode.MUSIC
 
 class WebViewManager {
     var webView: WebView? = null
+        private set
+
+    var musicWebView: WebView? = null
         private set
 
     var moviesWebView: WebView? = null
@@ -49,6 +56,7 @@ class WebViewManager {
     // First URL to load when each WebView is created (resume support).
     // Consumed once the WebView is created.
     var pendingYoutubeUrl: String? = null
+    var pendingMusicUrl: String? = null
     var pendingMoviesUrl: String? = null
     var pendingAnimeUrl: String? = null
 
@@ -60,11 +68,25 @@ class WebViewManager {
         private set(value) { _activeMode.value = value }
 
     fun activate(mode: BrowserMode) {
+        if (_activeMode.value == mode) return
         _activeMode.value = mode
+        syncActiveNavState()
+    }
+
+    /**
+     * Re-point the shared nav/URL state at the WebView for [activeMode] so the
+     * back button and edge-swipe reflect the tab that is actually on screen.
+     */
+    private fun syncActiveNavState() {
+        val wv = activeWebView() ?: return
+        wv.url?.let { _currentUrl.value = it }
+        _canGoBack.value = wv.canGoBack()
+        _canGoForward.value = wv.canGoForward()
     }
 
     private fun activeWebView(): WebView? = when (activeMode) {
         BrowserMode.YOUTUBE -> webView
+        BrowserMode.MUSIC -> musicWebView
         BrowserMode.MOVIES -> moviesWebView
         BrowserMode.ANIME -> animeWebView
     }
@@ -151,6 +173,7 @@ class WebViewManager {
     fun getOrCreateWebView(mode: BrowserMode, context: Context): WebView {
         return when (mode) {
             BrowserMode.YOUTUBE -> webView ?: createYoutubeWebView(context)
+            BrowserMode.MUSIC -> musicWebView ?: createMusicWebView(context)
             BrowserMode.MOVIES -> moviesWebView ?: createMoviesWebView(context)
             BrowserMode.ANIME -> animeWebView ?: createAnimeWebView(context)
         }
@@ -162,6 +185,16 @@ class WebViewManager {
         webView = wv
         val initial = pendingYoutubeUrl ?: Constants.YOUTUBE_HOME
         pendingYoutubeUrl = null
+        wv.loadUrl(initial)
+        return wv
+    }
+
+    private fun createMusicWebView(context: Context): WebView {
+        val wv = MediaWebView(context)
+        configureWebView(wv, BrowserMode.MUSIC)
+        musicWebView = wv
+        val initial = pendingMusicUrl ?: Constants.YOUTUBE_MUSIC_HOME
+        pendingMusicUrl = null
         wv.loadUrl(initial)
         return wv
     }
@@ -240,7 +273,7 @@ class WebViewManager {
                 userAgentString = WebSettings.getDefaultUserAgent(wv.context)
                     .replace("; wv", "")
                 mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                if (mode != BrowserMode.YOUTUBE) {
+                if (!mode.isYoutubeFamily) {
                     // Kill popups/popunders: no automatic windows, and new-window
                     // requests are rejected in onCreateWindow below.
                     javaScriptCanOpenWindowsAutomatically = false
@@ -250,7 +283,7 @@ class WebViewManager {
                     isAlgorithmicDarkeningAllowed = false
                 }
             }
-            if (mode == BrowserMode.YOUTUBE) {
+            if (mode.isYoutubeFamily) {
                 CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
             } else {
                 profiles[mode]?.cookieManager?.setAcceptThirdPartyCookies(this, true)
@@ -262,7 +295,7 @@ class WebViewManager {
             webViewClient = object : WebViewClient() {
                 override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                     val url = request.url.toString()
-                    if (mode == BrowserMode.YOUTUBE) {
+                    if (mode.isYoutubeFamily) {
                         if (NavigationBlocker.shouldAllowNavigation(url, allowAll = false)) {
                             return false
                         }
@@ -414,7 +447,7 @@ class WebViewManager {
      * showing the mirror's own "Page not found" route.
      */
     private fun redirectIfDeadMirror(view: WebView, mode: BrowserMode, url: String): Boolean {
-        if (mode == BrowserMode.YOUTUBE) return false
+        if (mode.isYoutubeFamily) return false
         val host = runCatching { java.net.URI(url).host }.getOrNull()?.lowercase() ?: return false
         if (host !in Constants.DEAD_MOVIE_HOSTS) return false
         val home = homeResolver?.invoke(mode)?.takeIf { it.isNotBlank() } ?: return false
@@ -607,13 +640,14 @@ class WebViewManager {
     }
 
     fun destroy() {
-        listOf(webView, moviesWebView, animeWebView).forEach { wv ->
+        listOf(webView, musicWebView, moviesWebView, animeWebView).forEach { wv ->
             wv?.apply {
                 stopLoading()
                 destroy()
             }
         }
         webView = null
+        musicWebView = null
         moviesWebView = null
         animeWebView = null
     }

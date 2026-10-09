@@ -20,6 +20,7 @@ class PreferencesManager(private val context: Context) {
         val AUTO_HIDE_BAR = booleanPreferencesKey("auto_hide_bar")
         val NOTIF_PERM_REQUESTED = booleanPreferencesKey("notif_perm_requested")
         val YOUTUBE_LAST_URL = stringPreferencesKey("youtube_last_url")
+        val YOUTUBE_MUSIC_LAST_URL = stringPreferencesKey("youtube_music_last_url")
         val MOVIES_LAST_URL = stringPreferencesKey("movies_last_url")
         val ANIME_LAST_URL = stringPreferencesKey("anime_last_url")
         val MOVIES_SOURCE_URL = stringPreferencesKey("movies_source_url")
@@ -34,6 +35,7 @@ class PreferencesManager(private val context: Context) {
     val autoHideBar: Flow<Boolean> = context.dataStore.data.map { it[AUTO_HIDE_BAR] ?: false }
     val notifPermissionRequested: Flow<Boolean> = context.dataStore.data.map { it[NOTIF_PERM_REQUESTED] ?: false }
     val youtubeLastUrl: Flow<String?> = context.dataStore.data.map { it[YOUTUBE_LAST_URL] }
+    val youtubeMusicLastUrl: Flow<String?> = context.dataStore.data.map { it[YOUTUBE_MUSIC_LAST_URL] }
     val moviesLastUrl: Flow<String?> = context.dataStore.data.map { it[MOVIES_LAST_URL] }
     val animeLastUrl: Flow<String?> = context.dataStore.data.map { it[ANIME_LAST_URL] }
 
@@ -64,6 +66,10 @@ class PreferencesManager(private val context: Context) {
 
     suspend fun setYoutubeLastUrl(url: String) {
         context.dataStore.edit { it[YOUTUBE_LAST_URL] = url }
+    }
+
+    suspend fun setYoutubeMusicLastUrl(url: String) {
+        context.dataStore.edit { it[YOUTUBE_MUSIC_LAST_URL] = url }
     }
 
     suspend fun setMoviesLastUrl(url: String) {
