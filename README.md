@@ -57,6 +57,13 @@
 - **Auto-hide bottom bar** — the bar fades away after 5s of inactivity and returns on touch.
 - **Configurable sources** — if a Movies/Anime mirror rotates or goes down, paste a new home URL in Settings.
 
+## What's New in v2.8.9
+
+- **Hardened ad blocking** — blocks YouTube feed and video ads, plus movie/anime popups and ad navigation.
+- **Per-tab history** — YouTube Music keeps its own back/forward history, independent of the other tabs.
+- **UI polish** — bottom-bar icons scale responsively; lock icons adapt to the active theme.
+- **Playback fix** — paused videos no longer resume when the app returns from the background.
+
 ## Download & Install
 
 Grab the latest signed APK from the **[Releases page](https://github.com/Isaac-1555/MyTube_Android/releases/latest)**.
@@ -165,6 +172,25 @@ Then build:
 ```
 
 `keystore.properties`, `*.jks` and `*.keystore` are git-ignored — never commit your signing keys.
+
+## Changelog
+
+### v2.8.9 — 2026-10-08
+
+- Adblock: plug YouTube feed and video ad leaks
+- Adblock: block movie/anime popups and ad navigation
+- Per-tab history for YouTube Music
+- Responsive bottom-bar icon sizing
+- Theme-adaptive lock icon colors
+- Playback: don't resume paused video on background
+
+### v2.0.0 — 2026-09-30
+
+- Movies and Anime tabs with isolated WebView profiles
+- Rich media controls: real prev/next and artwork tint (Android 13+)
+- Edge-swipe navigation, screen lock, video-only PiP
+- Auto-hide bottom bar
+- README with screenshots and demo gifs
 
 ## Tech stack
 
