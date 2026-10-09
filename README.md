@@ -61,7 +61,7 @@
 
 Grab the latest signed APK from the **[Releases page](https://github.com/Isaac-1555/MyTube_Android/releases/latest)**.
 
-Direct download: **[MyTube-v2.0.0-release.apk](https://github.com/Isaac-1555/MyTube_Android/releases/download/v2.0.0/MyTube-v2.0.0-release.apk)**
+Direct download: **[MyTube-v2.8.9-release.apk](https://github.com/Isaac-1555/MyTube_Android/releases/download/v2.8.9/MyTube-v2.8.9-release.apk)**
 
 ### Install on Android
 
@@ -74,7 +74,7 @@ Direct download: **[MyTube-v2.0.0-release.apk](https://github.com/Isaac-1555/MyT
 ### Install with ADB
 
 ```bash
-adb install MyTube-v2.0.0-release.apk
+adb install MyTube-v2.8.9-release.apk
 ```
 
 ### Requirements
@@ -85,7 +85,7 @@ adb install MyTube-v2.0.0-release.apk
 ### Verify the download (optional)
 
 ```bash
-apksigner verify --print-certs MyTube-v2.0.0-release.apk
+apksigner verify --print-certs MyTube-v2.8.9-release.apk
 ```
 
 The release is signed with APK Signature Scheme v2. Certificate SHA-256:
