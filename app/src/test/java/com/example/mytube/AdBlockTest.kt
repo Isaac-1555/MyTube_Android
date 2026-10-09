@@ -39,6 +39,47 @@ class FilterParserTest {
         assertEquals("youtube.com", f.domain)
         assertEquals("ytd-promoted-video-renderer", f.selector)
     }
+
+    @Test
+    fun multiDomainCosmeticMatchesAnyListedHost() {
+        val f = FilterParser.parseLine("a.com,b.net##.ad-banner") as UblockFilter.Cosmetic
+        assertEquals("a.com,b.net", f.domain)
+        assertTrue(FilterParser.cosmeticApplies(f.domain, "www.a.com"))
+        assertTrue(FilterParser.cosmeticApplies(f.domain, "b.net"))
+        assertFalse(FilterParser.cosmeticApplies(f.domain, "c.org"))
+    }
+
+    @Test
+    fun negatedCosmeticDomainExcludes() {
+        val list = "example.com,~ads.example.com"
+        assertTrue(FilterParser.cosmeticApplies(list, "www.example.com"))
+        assertFalse(FilterParser.cosmeticApplies(list, "ads.example.com"))
+    }
+
+    @Test
+    fun genericCosmeticAppliesEverywhere() {
+        val f = FilterParser.parseLine("##[id*=\"popunder\"]") as UblockFilter.Cosmetic
+        assertNull(f.domain)
+        assertTrue(FilterParser.cosmeticApplies(f.domain, "anything.tld"))
+    }
+
+    @Test
+    fun advancedSelectorWithHashIsKept() {
+        val f = FilterParser.parseLine("site.com##div:has(> #sponsor)") as UblockFilter.Cosmetic
+        assertEquals("div:has(> #sponsor)", f.selector)
+    }
+
+    @Test
+    fun cosmeticExceptionRuleIsSkipped() {
+        assertNull(FilterParser.parseLine("site.com#@#.ad-banner"))
+    }
+
+    @Test
+    fun popupOptionIsFlagged() {
+        val f = FilterParser.parseLine("||popads.net^\$popup") as UblockFilter.Network
+        assertEquals("||popads.net", f.pattern)
+        assertTrue(f.isPopup)
+    }
 }
 
 class UblockScriptletsTest {
@@ -60,5 +101,19 @@ class UblockScriptletsTest {
         assertTrue(UblockScriptlets.AD_KEYS.contains("adSlotRenderer"))
         assertTrue(UblockScriptlets.AD_KEYS.contains("inFeedAdLayoutRenderer"))
         assertTrue(UblockScriptlets.AD_KEYS.contains("adPlacements"))
+    }
+
+    @Test
+    fun siteGuardNeutralizesWindowOpenAndBlankLinks() {
+        val js = UblockScriptlets.getSiteGuardJs("")
+        assertTrue(js.contains("window.open=function(){return null;}"))
+        assertTrue(js.contains("_blank"))
+        assertTrue(js.contains("__mytube_site_guard"))
+    }
+
+    @Test
+    fun siteGuardEmbedsCss() {
+        val js = UblockScriptlets.getSiteGuardJs("[id*=\"popunder\"]{display:none!important}")
+        assertTrue(js.contains("popunder"))
     }
 }

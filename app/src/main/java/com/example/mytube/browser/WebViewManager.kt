@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.Message
 import android.util.Log
 import android.view.ViewGroup
 import android.view.View
@@ -107,10 +108,16 @@ class WebViewManager {
     var networkBlocker: ((String) -> Boolean)? = null
 
     /**
-     * Supplies the document-start ad-block script. Set by the ViewModel so the
-     * script can include the current cosmetic filter set.
+     * Cancels an ad/tracker top-level navigation on non-YouTube tabs. Receives
+     * (targetUrl, currentPageHost); returns true to block.
      */
-    var documentStartScriptProvider: (() -> String)? = null
+    var shouldBlockNavigation: ((String, String?) -> Boolean)? = null
+
+    /**
+     * Supplies the document-start ad-block script for a given mode. Set by the
+     * ViewModel so the script can include the current cosmetic filter set.
+     */
+    var documentStartScriptProvider: ((BrowserMode) -> String)? = null
 
     @Volatile
     private var documentStartSupported = false
@@ -213,7 +220,7 @@ class WebViewManager {
 
     private fun configureWebView(wv: WebView, mode: BrowserMode) {
         val docStartScript = runCatching {
-            documentStartScriptProvider?.invoke() ?: UblockScriptlets.getDocumentStartJs()
+            documentStartScriptProvider?.invoke(mode) ?: UblockScriptlets.getDocumentStartJs()
         }.getOrElse { UblockScriptlets.getDocumentStartJs() }
         wv.apply {
             layoutParams = ViewGroup.LayoutParams(
@@ -233,6 +240,12 @@ class WebViewManager {
                 userAgentString = WebSettings.getDefaultUserAgent(wv.context)
                     .replace("; wv", "")
                 mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                if (mode != BrowserMode.YOUTUBE) {
+                    // Kill popups/popunders: no automatic windows, and new-window
+                    // requests are rejected in onCreateWindow below.
+                    javaScriptCanOpenWindowsAutomatically = false
+                    setSupportMultipleWindows(true)
+                }
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     isAlgorithmicDarkeningAllowed = false
                 }
@@ -249,11 +262,21 @@ class WebViewManager {
             webViewClient = object : WebViewClient() {
                 override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                     val url = request.url.toString()
-                    if (NavigationBlocker.shouldAllowNavigation(url, allowAll = mode != BrowserMode.YOUTUBE)) {
-                        return false
+                    if (mode == BrowserMode.YOUTUBE) {
+                        if (NavigationBlocker.shouldAllowNavigation(url, allowAll = false)) {
+                            return false
+                        }
+                        onNavigationBlocked?.invoke(url)
+                        return true
                     }
-                    onNavigationBlocked?.invoke(url)
-                    return true
+                    // Movies/anime mirrors rotate across hosts, so allow in-site
+                    // and known provider navigation but cancel ad/tracker targets.
+                    val pageHost = runCatching { java.net.URI(view.url ?: "") }.getOrNull()?.host
+                    if (shouldBlockNavigation?.invoke(url, pageHost) == true) {
+                        onNavigationBlocked?.invoke(url)
+                        return true
+                    }
+                    return false
                 }
 
                 override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
@@ -322,6 +345,16 @@ class WebViewManager {
                     customView = null
                     customViewCallback = null
                     _fullscreenView.value = null
+                }
+
+                override fun onCreateWindow(
+                    view: WebView,
+                    isDialog: Boolean,
+                    isUserGesture: Boolean,
+                    resultMsg: Message
+                ): Boolean {
+                    // Reject every popup/new-window request on non-YouTube tabs.
+                    return false
                 }
             }
         }

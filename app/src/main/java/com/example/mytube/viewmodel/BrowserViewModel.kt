@@ -143,7 +143,9 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         // Seed bundled rules synchronously so blocking + cosmetic CSS are active
         // on the very first frame, before the async filter-list work finishes.
         abm.loadBundled()
-        webViewManager.documentStartScriptProvider = { abm.documentStartScript() }
+        webViewManager.documentStartScriptProvider = { mode ->
+            abm.documentStartScript(forYoutube = mode == BrowserMode.YOUTUBE)
+        }
         if (container.filterListUpdater.hasCached()) {
             viewModelScope.launch(Dispatchers.Default) { abm.loadCached() }
         } else {
@@ -152,6 +154,9 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
         playbackManager.jsEvaluator = { webViewManager.evaluateJsFromMainThread(it) }
         webViewManager.networkBlocker = { container.adBlockManager.shouldBlock(it) }
+        webViewManager.shouldBlockNavigation = { url, pageHost ->
+            container.adBlockManager.shouldBlockNavigation(url, pageHost)
+        }
         webViewManager.onPlaybackUpdate = { playing, title, duration, position, artUrl, hasNext, hasPrev ->
             if (bgPlaybackEnabled.value) {
                 playbackManager.updateMetadata(playing, title, duration, position, artUrl, hasNext, hasPrev)

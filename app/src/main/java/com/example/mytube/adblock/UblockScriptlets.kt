@@ -83,8 +83,40 @@ try{document.addEventListener('yt-navigate-finish',function(){applyCss();pruneOb
 """.trimIndent()
     }
 
+    /**
+     * Generic anti-popup guard for arbitrary (non-YouTube) sites. Runs at
+     * document-start before any page script:
+     *  - neutralizes `window.open` (the usual popunder/popup vector),
+     *  - demotes cross-site `target="_blank"` links to same-tab navigation so a
+     *    click can't silently spawn an ad window (native nav blocking then
+     *    cancels it if the host is filtered),
+     *  - injects cosmetic CSS before first paint.
+     *
+     * @param css cosmetic CSS applied at document-start.
+     */
+    fun getSiteGuardJs(css: String = ""): String {
+        return """
+(function(){
+if(window.__mytube_site_guard)return;
+window.__mytube_site_guard=true;
+try{window.open=function(){return null;};}catch(e){}
+function hostOf(u){try{return new URL(u,location.href).hostname.toLowerCase();}catch(e){return '';}}
+function sameSite(h){try{var s=location.hostname.toLowerCase();return h===s||h.endsWith('.'+s)||s.endsWith('.'+h);}catch(e){return true;}}
+function anchor(e){var t=e.target;while(t&&t!==document){if(t.tagName==='A')return t;t=t.parentElement;}return null;}
+function demote(e){try{var a=anchor(e);if(!a||!a.getAttribute)return;var tg=a.getAttribute('target');if(tg!=='_blank')return;var h=hostOf(a.href);if(!sameSite(h)){a.setAttribute('target','_self');}}catch(err){}}
+document.addEventListener('mousedown',demote,true);
+document.addEventListener('click',demote,true);
+var CSSTEXT='${jsString(css)}';
+function applyCss(){if(!CSSTEXT)return true;try{var s=document.getElementById('mytube-site-adblock-style');if(!s){s=document.createElement('style');s.id='mytube-site-adblock-style';s.textContent=CSSTEXT;var h=document.head||document.documentElement;if(!h)return false;h.appendChild(s);}return true;}catch(e){return true;}}
+(function waitHead(){if(applyCss())return;setTimeout(waitHead,0);})();
+document.addEventListener('DOMContentLoaded',applyCss,false);
+})();
+""".trimIndent()
+    }
+
     fun generate(domain: String, scriptlets: List<Scriptlet>): String {
-        val applicable = scriptlets.filter { it.domain == null || domain.contains(it.domain!!, ignoreCase = true) }
+        // Caller (AdBlockManager) has already scoped these to [domain].
+        val applicable = scriptlets
         if (applicable.isEmpty()) return ""
 
         val ops = mutableListOf<String>()

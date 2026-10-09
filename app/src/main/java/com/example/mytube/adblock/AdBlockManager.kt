@@ -93,8 +93,15 @@ class AdBlockManager(private val updater: FilterListUpdater) {
     /**
      * Document-start script (hooks + inline-data pruning + early cosmetic CSS)
      * built from the current filter set plus the built-in YouTube selectors.
+     *
+     * YouTube gets the full YouTube-specific hook set. Every other site gets the
+     * generic anti-popup guard so click-triggered ad windows are suppressed and
+     * generic cosmetic filters apply before first paint.
      */
-    fun documentStartScript(): String {
+    fun documentStartScript(forYoutube: Boolean = true): String {
+        if (!forYoutube) {
+            return UblockScriptlets.getSiteGuardJs(getGenericCosmeticCss())
+        }
         val css = buildString {
             append(getCosmeticCss("youtube.com"))
             if (isNotEmpty()) append('\n')
@@ -124,11 +131,40 @@ class AdBlockManager(private val updater: FilterListUpdater) {
         return blockedUrlSubstrings.any { url.contains(it, ignoreCase = true) }
     }
 
+    /**
+     * Top-level navigation gate for non-YouTube tabs. The page's own host and
+     * its parent/subdomains are always allowed so in-site navigation (and
+     * provider/embed links) keep working; anything the network filter set flags
+     * as an ad/tracker is cancelled before it can load.
+     */
+    fun shouldBlockNavigation(url: String, pageHost: String?): Boolean {
+        if (!url.startsWith("http://") && !url.startsWith("https://")) return false
+        val host = try { java.net.URI(url).host?.lowercase() } catch (_: Exception) { null } ?: return false
+        if (isContentHost(host)) return false
+        if (!pageHost.isNullOrBlank()) {
+            val ph = pageHost.lowercase()
+            if (host == ph || host.endsWith(".$ph") || ph.endsWith(".$host")) return false
+        }
+        return shouldBlock(url)
+    }
+
     fun getCosmeticCss(domain: String): String {
         if (!ready) return ""
         val sb = StringBuilder()
         for (f in cosmeticFilters) {
-            if (f.domain == null || domain.contains(f.domain, ignoreCase = true)) {
+            if (FilterParser.cosmeticApplies(f.domain, domain)) {
+                sb.append(f.selector).append("{display:none!important}\n")
+            }
+        }
+        return sb.toString()
+    }
+
+    /** Cosmetic CSS for rules with no domain scope, safe on every site. */
+    fun getGenericCosmeticCss(): String {
+        if (!ready) return ""
+        val sb = StringBuilder()
+        for (f in cosmeticFilters) {
+            if (f.domain.isNullOrBlank()) {
                 sb.append(f.selector).append("{display:none!important}\n")
             }
         }
@@ -137,7 +173,9 @@ class AdBlockManager(private val updater: FilterListUpdater) {
 
     fun getScriptletJs(domain: String): String {
         if (!ready) return ""
-        val scripts = scriptletFilters.map { Scriptlet(it.domain, it.name, it.args) }
+        val scripts = scriptletFilters
+            .filter { FilterParser.cosmeticApplies(it.domain, domain) }
+            .map { Scriptlet(it.domain, it.name, it.args) }
         return UblockScriptlets.generate(domain, scripts)
     }
 
