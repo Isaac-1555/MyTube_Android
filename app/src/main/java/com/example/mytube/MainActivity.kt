@@ -111,7 +111,7 @@ class MainActivity : ComponentActivity() {
     override fun onPause() {
         super.onPause()
         browserViewModel.playbackManager.setAppInForeground(false)
-        if (browserViewModel.bgPlaybackEnabled.value) {
+        if (browserViewModel.bgPlaybackEnabled.value && browserViewModel.playbackManager.isPlaying) {
             browserViewModel.webViewManager.evaluateJs("window.setBackgroundMode && window.setBackgroundMode(true)")
             browserViewModel.webViewManager.evaluateJs("window.MyTubeBgTick && window.MyTubeBgTick()")
         }
@@ -135,11 +135,14 @@ class MainActivity : ComponentActivity() {
             enterPictureInPictureMode(params)
             return
         }
-        if (browserViewModel.bgPlaybackEnabled.value) {
+        val bgEnabled = browserViewModel.bgPlaybackEnabled.value
+        if (bgEnabled && browserViewModel.playbackManager.isPlaying) {
             wm.evaluateJs("window.setBackgroundMode && window.setBackgroundMode(true)")
             wm.evaluateJs("window.MyTubeBgTick && window.MyTubeBgTick()")
         } else {
-            wm.evaluateJs("window.MyTubePause && window.MyTubePause()")
+            if (!bgEnabled) {
+                wm.evaluateJs("window.MyTubePause && window.MyTubePause()")
+            }
             wm.evaluateJs("window.setBackgroundMode && window.setBackgroundMode(false)")
             browserViewModel.playbackManager.stopService()
         }
