@@ -11,6 +11,7 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -20,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -226,48 +228,63 @@ private fun BottomControls(
     onSleepTimer: () -> Unit,
     onToggleLock: () -> Unit
 ) {
-    Row(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surface)
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
     ) {
-        IconButton(onClick = onReload, enabled = !isLocked) {
-            Icon(Icons.Default.Refresh, contentDescription = "Reload")
-        }
-        IconButton(onClick = onYoutube, enabled = !isLocked) {
-            Icon(painterResource(R.drawable.ic_youtube), contentDescription = "YouTube")
-        }
-        IconButton(onClick = onYoutubeMusic, enabled = !isLocked) {
-            Icon(painterResource(R.drawable.ic_youtube_music), contentDescription = "YouTube Music")
-        }
-        IconButton(onClick = onMovies, enabled = !isLocked) {
-            Icon(painterResource(R.drawable.ic_clapperboard), contentDescription = "Movies")
-        }
-        IconButton(onClick = onAnime, enabled = !isLocked) {
-            Icon(painterResource(R.drawable.ic_shell), contentDescription = "Anime")
-        }
-        Spacer(Modifier.weight(1f))
-        IconButton(onClick = onSleepTimer, enabled = !isLocked) {
-            Icon(Icons.Default.Bedtime, contentDescription = "Sleep timer")
-        }
-        sleepTimerRemaining?.let { remaining ->
-            Text(
-                text = formatRemaining(remaining),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(start = 4.dp)
-            )
-        }
-        IconButton(onClick = onSettings, enabled = !isLocked) {
-            Icon(Icons.Default.Settings, contentDescription = "Settings")
-        }
-        IconButton(onClick = onToggleLock) {
-            Icon(
-                imageVector = if (isLocked) Icons.Default.Lock else Icons.Default.LockOpen,
-                contentDescription = if (isLocked) "Unlock screen" else "Lock screen"
-            )
+        val hPadding = 8.dp
+        val buttonCount = 8
+        val timerReserve = if (sleepTimerRemaining != null) 56.dp else 0.dp
+        val itemSize = minOf(
+            48.dp,
+            ((maxWidth - hPadding * 2 - timerReserve) / buttonCount).coerceAtLeast(0.dp)
+        )
+        val iconSize = minOf(24.dp, itemSize * 0.62f)
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = hPadding, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onReload, enabled = !isLocked, modifier = Modifier.size(itemSize)) {
+                Icon(Icons.Default.Refresh, contentDescription = "Reload", modifier = Modifier.size(iconSize))
+            }
+            IconButton(onClick = onYoutube, enabled = !isLocked, modifier = Modifier.size(itemSize)) {
+                Icon(painterResource(R.drawable.ic_youtube), contentDescription = "YouTube", modifier = Modifier.size(iconSize))
+            }
+            IconButton(onClick = onYoutubeMusic, enabled = !isLocked, modifier = Modifier.size(itemSize)) {
+                Icon(painterResource(R.drawable.ic_youtube_music), contentDescription = "YouTube Music", modifier = Modifier.size(iconSize))
+            }
+            IconButton(onClick = onMovies, enabled = !isLocked, modifier = Modifier.size(itemSize)) {
+                Icon(painterResource(R.drawable.ic_clapperboard), contentDescription = "Movies", modifier = Modifier.size(iconSize))
+            }
+            IconButton(onClick = onAnime, enabled = !isLocked, modifier = Modifier.size(itemSize)) {
+                Icon(painterResource(R.drawable.ic_shell), contentDescription = "Anime", modifier = Modifier.size(iconSize))
+            }
+            Spacer(Modifier.weight(1f))
+            IconButton(onClick = onSleepTimer, enabled = !isLocked, modifier = Modifier.size(itemSize)) {
+                Icon(Icons.Default.Bedtime, contentDescription = "Sleep timer", modifier = Modifier.size(iconSize))
+            }
+            sleepTimerRemaining?.let { remaining ->
+                Text(
+                    text = formatRemaining(remaining),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(start = 4.dp)
+                )
+            }
+            IconButton(onClick = onSettings, enabled = !isLocked, modifier = Modifier.size(itemSize)) {
+                Icon(Icons.Default.Settings, contentDescription = "Settings", modifier = Modifier.size(iconSize))
+            }
+            IconButton(onClick = onToggleLock, modifier = Modifier.size(itemSize)) {
+                Icon(
+                    imageVector = if (isLocked) Icons.Default.Lock else Icons.Default.LockOpen,
+                    contentDescription = if (isLocked) "Unlock screen" else "Lock screen",
+                    modifier = Modifier.size(iconSize)
+                )
+            }
         }
     }
 }
