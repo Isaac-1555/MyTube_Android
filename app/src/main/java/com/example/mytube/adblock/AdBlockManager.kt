@@ -18,6 +18,29 @@ private val contentHosts = setOf(
     "ytstatic.l.google.com",
 )
 
+/**
+ * Selectors for YouTube ad containers that must be hidden before first paint.
+ * Applied at document-start so elevated/promoted tiles never flash.
+ */
+private val YOUTUBE_EXTRA_CSS = """
+ytd-ad-slot-renderer,
+ytd-promoted-sparkles-web-renderer,
+ytd-promoted-sparkles-text-search-renderer,
+ytd-promoted-video-renderer,
+ytd-compact-promoted-video-renderer,
+ytd-display-ad-renderer,
+ytd-in-feed-ad-layout-renderer,
+ytd-search-pyv-renderer,
+ytd-player-legacy-desktop-watch-ads-renderer,
+ytmusic-mealbar-promo-renderer,
+ytmusic-statement-banner-renderer,
+#masthead-ad,
+#player-ads,
+.ytp-ad-module,
+.ytp-ad-overlay-container,
+.video-ads{display:none!important}
+""".trimIndent()
+
 private fun isContentHost(host: String): Boolean {
     return contentHosts.any { host == it || host.endsWith(".$it") }
 }
@@ -37,8 +60,12 @@ class AdBlockManager(private val updater: FilterListUpdater) {
 
     val isReady: Boolean get() = ready
 
-    fun loadCached() {
-        val lines = updater.loadCached()
+    /**
+     * Ship a small built-in rule set so ad blocking is active on the very first
+     * frame, before the async filter-list download/parse finishes.
+     */
+    fun loadBundled() {
+        val lines = updater.loadBundled()
         if (lines.isEmpty()) return
         val parsed = lines.mapNotNull { FilterParser.parseLine(it) }
         networkFilters = parsed.filterIsInstance<UblockFilter.Network>()
@@ -47,9 +74,33 @@ class AdBlockManager(private val updater: FilterListUpdater) {
         ready = true
     }
 
+    fun loadCached() {
+        val lines = updater.loadCached()
+        if (lines.isNotEmpty()) {
+            val parsed = lines.mapNotNull { FilterParser.parseLine(it) }
+            networkFilters = networkFilters + parsed.filterIsInstance<UblockFilter.Network>()
+            cosmeticFilters = cosmeticFilters + parsed.filterIsInstance<UblockFilter.Cosmetic>()
+            scriptletFilters = scriptletFilters + parsed.filterIsInstance<UblockFilter.ScriptletFilter>()
+        }
+        ready = true
+    }
+
     suspend fun downloadAndLoad() {
         updater.update()
         loadCached()
+    }
+
+    /**
+     * Document-start script (hooks + inline-data pruning + early cosmetic CSS)
+     * built from the current filter set plus the built-in YouTube selectors.
+     */
+    fun documentStartScript(): String {
+        val css = buildString {
+            append(getCosmeticCss("youtube.com"))
+            if (isNotEmpty()) append('\n')
+            append(YOUTUBE_EXTRA_CSS)
+        }
+        return UblockScriptlets.getDocumentStartJs(css)
     }
 
     fun shouldBlock(url: String): Boolean {

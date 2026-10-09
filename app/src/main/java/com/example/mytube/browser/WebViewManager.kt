@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.ViewGroup
 import android.view.View
 import android.webkit.CookieManager
@@ -25,7 +26,12 @@ import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import com.example.mytube.adblock.UblockScriptlets
 import com.example.mytube.util.Constants
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.ByteArrayInputStream
+import java.io.InputStream
+import java.net.HttpURLConnection
+import java.net.URL
 
 enum class BrowserMode { YOUTUBE, MOVIES, ANIME }
 
@@ -99,6 +105,15 @@ class WebViewManager {
     var shouldIntercept: ((String) -> WebResourceResponse?)? = null
     var onPlaybackUpdate: ((Boolean, String, Double, Double, String?, Boolean, Boolean) -> Unit)? = null
     var networkBlocker: ((String) -> Boolean)? = null
+
+    /**
+     * Supplies the document-start ad-block script. Set by the ViewModel so the
+     * script can include the current cosmetic filter set.
+     */
+    var documentStartScriptProvider: (() -> String)? = null
+
+    @Volatile
+    private var documentStartSupported = false
 
     private var customView: View? = null
     private var customViewCallback: WebChromeClient.CustomViewCallback? = null
@@ -197,6 +212,9 @@ class WebViewManager {
     }
 
     private fun configureWebView(wv: WebView, mode: BrowserMode) {
+        val docStartScript = runCatching {
+            documentStartScriptProvider?.invoke() ?: UblockScriptlets.getDocumentStartJs()
+        }.getOrElse { UblockScriptlets.getDocumentStartJs() }
         wv.apply {
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -244,6 +262,9 @@ class WebViewManager {
                         return WebResourceResponse("text/plain", "utf-8", 204, "No Content", emptyMap(), ByteArrayInputStream(ByteArray(0)))
                     }
                     blockAdDomain(url)?.let { return it }
+                    if (isYoutubeApi(url)) {
+                        interceptYoutubeApi(request)?.let { return it }
+                    }
                     return shouldIntercept?.invoke(url)
                 }
 
@@ -253,6 +274,11 @@ class WebViewManager {
                         _currentUrl.value = url
                     }
                     _isLoading.value = true
+                    // Fallback when the WebView can't run true document-start
+                    // scripts: inject as early as the page lifecycle allows.
+                    if (!documentStartSupported) {
+                        runCatching { view.evaluateJavascript(docStartScript, null) }
+                    }
                 }
 
                 override fun onPageFinished(view: WebView, url: String?) {
@@ -299,13 +325,18 @@ class WebViewManager {
                 }
             }
         }
-        try {
-            WebViewCompat.addDocumentStartJavaScript(
-                wv,
-                UblockScriptlets.getDocumentStartJs(),
-                setOf("*")
-            )
-        } catch (_: Exception) { }
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+            try {
+                WebViewCompat.addDocumentStartJavaScript(wv, docStartScript, setOf("*"))
+                documentStartSupported = true
+            } catch (e: Exception) {
+                documentStartSupported = false
+                Log.w(TAG, "addDocumentStartJavaScript failed: ${e.message}")
+            }
+        } else {
+            documentStartSupported = false
+            Log.w(TAG, "DOCUMENT_START_SCRIPT unsupported; using onPageStarted fallback")
+        }
     }
 
     fun hideCustomView() {
@@ -317,6 +348,31 @@ class WebViewManager {
 
     companion object {
         private const val TAG = "WebViewManager"
+        private val YOUTUBE_API_PATHS = listOf(
+            "/youtubei/v1/player",
+            "/youtubei/v1/browse",
+            "/youtubei/v1/search",
+            "/youtubei/v1/next",
+        )
+    }
+
+    private fun isYoutubeApi(url: String): Boolean =
+        YOUTUBE_API_PATHS.any { url.contains(it) }
+
+    /**
+     * Reads a request body via the (hidden) `getRequestBody()` accessor. Returns
+     * null when unavailable, so callers can fall back to normal loading.
+     */
+    private fun readRequestBody(request: WebResourceRequest): InputStream? {
+        val candidates = listOf(request.javaClass, WebResourceRequest::class.java)
+        for (cls in candidates) {
+            try {
+                val m = cls.getMethod("getRequestBody")
+                return m.invoke(request) as? InputStream
+            } catch (_: Exception) {
+            }
+        }
+        return null
     }
 
     /**
@@ -333,6 +389,98 @@ class WebViewManager {
         _isLoading.value = false
         view.loadUrl(home)
         return true
+    }
+
+    /**
+     * Fetch the `/youtubei/` response on the native side and strip ad keys from
+     * the JSON before the page sees it. Never returns an empty body (that breaks
+     * playback) — on any anomaly we return null and let the WebView load it.
+     */
+    private fun interceptYoutubeApi(request: WebResourceRequest): WebResourceResponse? {
+        val isPost = request.method.equals("POST", ignoreCase = true)
+        // The request body isn't part of the public WebResourceRequest API. If we
+        // can't read it, skip interception rather than replaying an empty POST
+        // (which would fail and force a duplicate request).
+        val requestBody = if (isPost) readRequestBody(request) else null
+        if (isPost && requestBody == null) return null
+        return try {
+            val url = request.url.toString()
+            val conn = (URL(url).openConnection() as? HttpURLConnection) ?: return null
+            conn.requestMethod = request.method
+            conn.connectTimeout = 10_000
+            conn.readTimeout = 15_000
+            for ((k, v) in request.requestHeaders) {
+                // Let HttpURLConnection manage encoding/length so the body we
+                // read is already decoded and safe to re-serve.
+                if (k.equals("Host", ignoreCase = true)) continue
+                if (k.equals("Accept-Encoding", ignoreCase = true)) continue
+                if (k.equals("Content-Length", ignoreCase = true)) continue
+                if (k.equals("Connection", ignoreCase = true)) continue
+                conn.setRequestProperty(k, v)
+            }
+            conn.setRequestProperty("User-Agent", webView?.settings?.userAgentString ?: "Mozilla/5.0")
+            CookieManager.getInstance().getCookie(url)?.let { conn.setRequestProperty("Cookie", it) }
+            if (requestBody != null) {
+                conn.doOutput = true
+                requestBody.copyTo(conn.outputStream)
+            }
+            val code = conn.responseCode
+            if (code !in 200..299) return null
+            val contentType = conn.contentType ?: return null
+            if (!contentType.contains("json", ignoreCase = true)) return null
+            val raw = conn.inputStream.bufferedReader().use { it.readText() }
+            val stripped = stripAdKeys(raw)
+            if (stripped == null) return null
+            val mime = contentType.substringBefore(';').trim()
+            val headers = conn.headerFields
+                ?.filterKeys { it != null }
+                ?.mapKeys { it.key!! }
+                ?.filterKeys {
+                    !it.equals("Content-Encoding", ignoreCase = true) &&
+                        !it.equals("Content-Length", ignoreCase = true) &&
+                        !it.equals("Transfer-Encoding", ignoreCase = true)
+                }
+                ?.mapValues { it.value.joinToString(", ") }
+                ?: emptyMap()
+            WebResourceResponse(mime, "utf-8", code, "OK", headers, stripped.byteInputStream(Charsets.UTF_8))
+        } catch (e: Exception) {
+            Log.w(TAG, "Youtube API intercept failed: ${e.message}")
+            null
+        }
+    }
+
+    /** Returns null when nothing changed so callers can pass the response through. */
+    private fun stripAdKeys(json: String): String? {
+        return try {
+            val obj = JSONObject(json)
+            if (pruneJson(obj)) obj.toString() else null
+        } catch (e: Exception) {
+            Log.w(TAG, "stripAdKeys failed: ${e.message}")
+            null
+        }
+    }
+
+    private fun pruneJson(node: Any?): Boolean {
+        var changed = false
+        when (node) {
+            is JSONObject -> {
+                val keys = node.keys().asSequence().toList()
+                for (k in keys) {
+                    if (k in UblockScriptlets.AD_KEYS) {
+                        node.remove(k)
+                        changed = true
+                    } else if (pruneJson(node.opt(k))) {
+                        changed = true
+                    }
+                }
+            }
+            is JSONArray -> {
+                for (i in 0 until node.length()) {
+                    if (pruneJson(node.opt(i))) changed = true
+                }
+            }
+        }
+        return changed
     }
 
     private fun blockAdDomain(url: String): WebResourceResponse? {

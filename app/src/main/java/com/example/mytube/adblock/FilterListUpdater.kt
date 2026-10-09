@@ -63,5 +63,17 @@ class FilterListUpdater(private val context: Context) {
             ?: emptyList()
     }
 
+    /**
+     * Built-in seed rules bundled in assets, so blocking works before the
+     * network filter lists finish downloading.
+     */
+    fun loadBundled(): List<String> {
+        return try {
+            context.assets.open("filters/base.txt").bufferedReader().use { it.readLines() }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
     fun hasCached(): Boolean = cacheDir.exists() && (cacheDir.listFiles()?.isNotEmpty() == true)
 }

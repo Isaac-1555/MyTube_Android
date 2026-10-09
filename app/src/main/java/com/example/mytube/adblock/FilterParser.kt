@@ -50,17 +50,23 @@ object FilterParser {
             }
         }
 
-        val net = networkRe.find(s)
+        // Split off $options so host-anchored rules aren't discarded wholesale
+        // (almost every EasyList/uBlock network rule carries options). Options
+        // that narrow matching to a scope we can't honor ($domain=, ipaddress=)
+        // are skipped rather than applied globally.
+        val dollar = s.indexOf('$')
+        val patternPart = if (dollar >= 0) s.substring(0, dollar) else s
+        val options = if (dollar >= 0) s.substring(dollar + 1) else ""
+        if (options.contains("badfilter")) return null
+        if (options.contains("domain=") || options.contains("ipaddress=")) return null
+
+        val net = networkRe.find(patternPart)
         if (net != null) {
-            // Parser can't honor $options (e.g. $domain, $third-party, ipaddress=).
-            // Applying the stripped pattern would create blanket matches like
-            // ||com (any .com host) or |https:// (every URL). Skip such filters.
-            if (s.contains('$') || s.contains("badfilter")) return null
             val isException = net.groupValues[1] == "@@"
             val prefix = net.groupValues[2]
             val pattern = net.groupValues[3].removeSuffix("^")
 
-            if (pattern.isNotBlank()) {
+            if (pattern.isNotBlank() && !isBlanketPattern(prefix, pattern)) {
                 return UblockFilter.Network(
                     pattern = if (prefix == "||") "||$pattern" else pattern,
                     isException = isException
@@ -69,6 +75,18 @@ object FilterParser {
         }
 
         return null
+    }
+
+    /**
+     * Reject patterns that would match far too much once stripped of their
+     * options: `||com`, bare `http`, etc.
+     */
+    private fun isBlanketPattern(prefix: String, pattern: String): Boolean {
+        if (prefix == "||") {
+            val domain = pattern.removePrefix("||").trim('/')
+            return domain.isEmpty() || (!domain.contains('.') && !domain.contains('/'))
+        }
+        return pattern.length < 4
     }
 
     private fun parseArgs(body: String): List<String> {

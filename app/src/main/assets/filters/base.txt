@@ -1,0 +1,39 @@
+! MyTube base filter seed — active before network lists load
+! Network: ad hosts
+||doubleclick.net^
+||googlesyndication.com^
+||googleadservices.com^
+||googletagservices.com^
+||adservice.google.com^
+||pagead2.googlesyndication.com^
+||googleadsserving.cn^
+||2mdn.net^
+||ads.youtube.com^
+
+! Network: substring guards (parity with the previous non-ready fallback)
+/pagead/
+adclick
+adservice
+/ad_break
+adunit
+adinteractive
+yt_ads
+
+! Cosmetic: YouTube feed / watch ad containers
+youtube.com##ytd-ad-slot-renderer
+youtube.com##ytd-promoted-sparkles-web-renderer
+youtube.com##ytd-promoted-sparkles-text-search-renderer
+youtube.com##ytd-promoted-video-renderer
+youtube.com##ytd-compact-promoted-video-renderer
+youtube.com##ytd-display-ad-renderer
+youtube.com##ytd-in-feed-ad-layout-renderer
+youtube.com##ytd-search-pyv-renderer
+youtube.com##ytd-player-legacy-desktop-watch-ads-renderer
+youtube.com##ytd-compact-promoted-video-renderer
+youtube.com###masthead-ad
+youtube.com###player-ads
+youtube.com##.ytp-ad-module
+youtube.com##.ytp-ad-overlay-container
+youtube.com##.video-ads
+music.youtube.com##ytmusic-mealbar-promo-renderer
+music.youtube.com##ytmusic-statement-banner-renderer

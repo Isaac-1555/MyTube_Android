@@ -140,10 +140,14 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
     init {
         val abm = container.adBlockManager
-        when {
-            abm.isReady -> viewModelScope.launch(Dispatchers.Default) { abm.loadCached() }
-            container.filterListUpdater.hasCached() -> viewModelScope.launch(Dispatchers.Default) { abm.loadCached() }
-            else -> viewModelScope.launch { abm.downloadAndLoad() }
+        // Seed bundled rules synchronously so blocking + cosmetic CSS are active
+        // on the very first frame, before the async filter-list work finishes.
+        abm.loadBundled()
+        webViewManager.documentStartScriptProvider = { abm.documentStartScript() }
+        if (container.filterListUpdater.hasCached()) {
+            viewModelScope.launch(Dispatchers.Default) { abm.loadCached() }
+        } else {
+            viewModelScope.launch { abm.downloadAndLoad() }
         }
 
         playbackManager.jsEvaluator = { webViewManager.evaluateJsFromMainThread(it) }
@@ -170,6 +174,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
         webViewManager.onPageLoaded = { url, _ ->
             injectScripts()
+            injectScriptlets(url)
             injectCosmeticCss(url)
         }
         webViewManager.onPersistablePage = { mode, url ->
@@ -214,6 +219,12 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         // Ad domain blocking in WebViewManager.shouldInterceptRequest.
         // Scriptlet handles ad stripping + YouTube internal config disabling.
         webViewManager.shouldIntercept = { null }
+    }
+
+    private fun injectScriptlets(url: String) {
+        val domain = kotlin.runCatching { java.net.URI(url).host }.getOrNull() ?: return
+        val js = container.adBlockManager.getScriptletJs(domain)
+        if (js.isNotBlank()) webViewManager.evaluateJs(js)
     }
 
     private fun injectCosmeticCss(url: String) {
