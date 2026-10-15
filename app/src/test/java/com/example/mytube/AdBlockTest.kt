@@ -116,4 +116,32 @@ class UblockScriptletsTest {
         val js = UblockScriptlets.getSiteGuardJs("[id*=\"popunder\"]{display:none!important}")
         assertTrue(js.contains("popunder"))
     }
+
+    @Test
+    fun documentStartScriptEmbedsYtmusicCss() {
+        val js = UblockScriptlets.getDocumentStartJs("", "ytmusic-you-there-renderer{display:none}")
+        assertTrue(js.contains("ytmusic-you-there-renderer{display:none}"))
+        assertTrue(js.contains("mytube-ytmusic-style"))
+    }
+
+    @Test
+    fun documentStartScriptGatesYtmusicToMusicHost() {
+        val js = UblockScriptlets.getDocumentStartJs("")
+        assertTrue(js.contains("location.hostname==='music.youtube.com'"))
+        assertTrue(js.contains("killYtmPromos"))
+        assertTrue(js.contains("ytmusic-popup-container ytmusic-mealbar-promo-renderer"))
+    }
+
+    @Test
+    fun documentStartScriptClosesPromoDialogToClearBackdrop() {
+        val js = UblockScriptlets.getDocumentStartJs("")
+        assertTrue(js.contains("closest('tp-yt-paper-dialog')"))
+        assertTrue(js.contains("dlg.close()"))
+    }
+
+    @Test
+    fun documentStartScriptWatchesForMidSessionPromos() {
+        val js = UblockScriptlets.getDocumentStartJs("")
+        assertTrue(js.contains("MutationObserver"))
+    }
 }

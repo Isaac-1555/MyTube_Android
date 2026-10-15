@@ -44,8 +44,9 @@ object UblockScriptlets {
      * ytInitialData/ytInitialPlayerResponse, and hides ad containers via CSS.
      *
      * @param css cosmetic CSS to hide ad containers before first paint.
+     * @param ytmusicCss extra cosmetic CSS applied only on music.youtube.com.
      */
-    fun getDocumentStartJs(css: String = ""): String {
+    fun getDocumentStartJs(css: String = "", ytmusicCss: String = ""): String {
         val keys = AD_KEYS.joinToString(",") { "'$it'" }
         return """
 (function(){
@@ -77,8 +78,14 @@ var _o=XMLHttpRequest.prototype.open;XMLHttpRequest.prototype.open=function(m,u)
 var _s=XMLHttpRequest.prototype.send;XMLHttpRequest.prototype.send=function(){var x=this,oc=x.onreadystatechange;x.onreadystatechange=function(){if(x.readyState===4){try{if(typeof x.responseText==='string'){var t=x.responseText;if(hasAd(t)){var s=stripAdFields(t);Object.defineProperty(x,'responseText',{configurable:true,get:function(){return s;}});Object.defineProperty(x,'response',{configurable:true,get:function(){return s;}});}else if(x.response&&typeof x.response==='object'){pruneObj(x.response,0);}}}catch(e){}}if(oc)oc.apply(x,arguments);};return _s.apply(this,arguments);};
 var CSSTEXT='${jsString(css)}';
 function applyCss(){try{var s=document.getElementById('mytube-adblock-style');if(!s){s=document.createElement('style');s.id='mytube-adblock-style';s.textContent=CSSTEXT;var h=document.head||document.documentElement;if(!h)return false;h.appendChild(s);}return true;}catch(e){return true;}}
-(function waitHead(){if(applyCss())return;setTimeout(waitHead,0);})();
-try{document.addEventListener('yt-navigate-finish',function(){applyCss();pruneObj(window.ytInitialData,0);pruneObj(window.ytInitialPlayerResponse,0);},false);}catch(e){}
+var IS_YTM=location.hostname==='music.youtube.com';
+var YTMCSSTEXT='${jsString(ytmusicCss)}';
+function applyYtmCss(){if(!IS_YTM||!YTMCSSTEXT)return true;try{var s=document.getElementById('mytube-ytmusic-style');if(!s){s=document.createElement('style');s.id='mytube-ytmusic-style';s.textContent=YTMCSSTEXT;var h=document.head||document.documentElement;if(!h)return false;h.appendChild(s);}return true;}catch(e){return true;}}
+function killYtmPromos(){if(!IS_YTM)return;try{var nodes=document.querySelectorAll('ytmusic-popup-container ytmusic-mealbar-promo-renderer,ytmusic-popup-container ytmusic-statement-banner-renderer,ytmusic-popup-container ytmusic-you-there-renderer');for(var i=0;i<nodes.length;i++){var el=nodes[i];var dlg=el.closest?el.closest('tp-yt-paper-dialog'):null;if(dlg&&typeof dlg.close==='function'){dlg.close();}else if(el.remove){el.remove();}}}catch(e){}}
+(function waitHead(){if(applyCss()&&applyYtmCss())return;setTimeout(waitHead,0);})();
+killYtmPromos();
+if(IS_YTM){try{var _mo=new MutationObserver(function(){applyYtmCss();killYtmPromos();});_mo.observe(document,{childList:true,subtree:true});}catch(e){}}
+try{document.addEventListener('yt-navigate-finish',function(){applyCss();applyYtmCss();killYtmPromos();pruneObj(window.ytInitialData,0);pruneObj(window.ytInitialPlayerResponse,0);},false);}catch(e){}
 })();
 """.trimIndent()
     }

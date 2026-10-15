@@ -41,6 +41,20 @@ ytmusic-statement-banner-renderer,
 .video-ads{display:none!important}
 """.trimIndent()
 
+/**
+ * YouTube Music nag/promo containers. These render as modal `tp-yt-paper-dialog`
+ * overlays inside `ytmusic-popup-container`, each accompanied by a full-screen
+ * `tp-yt-iron-overlay-backdrop`. Hiding the renderer alone leaves that backdrop
+ * painted above the page, swallowing every tap, so the document-start script
+ * also closes these dialogs (letting iron-overlay tear down its own backdrop).
+ * Applied only on music.youtube.com.
+ */
+private val YTMUSIC_EXTRA_CSS = """
+ytmusic-you-there-renderer,
+ytmusic-popup-container tp-yt-paper-dialog:has(ytmusic-mealbar-promo-renderer),
+ytmusic-popup-container tp-yt-paper-dialog:has(ytmusic-statement-banner-renderer){display:none!important}
+""".trimIndent()
+
 private fun isContentHost(host: String): Boolean {
     return contentHosts.any { host == it || host.endsWith(".$it") }
 }
@@ -107,7 +121,7 @@ class AdBlockManager(private val updater: FilterListUpdater) {
             if (isNotEmpty()) append('\n')
             append(YOUTUBE_EXTRA_CSS)
         }
-        return UblockScriptlets.getDocumentStartJs(css)
+        return UblockScriptlets.getDocumentStartJs(css, YTMUSIC_EXTRA_CSS)
     }
 
     fun shouldBlock(url: String): Boolean {
