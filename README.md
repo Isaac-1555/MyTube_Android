@@ -57,18 +57,15 @@
 - **Auto-hide bottom bar** — the bar fades away after 5s of inactivity and returns on touch.
 - **Configurable sources** — if a Movies/Anime mirror rotates or goes down, paste a new home URL in Settings.
 
-## What's New in v2.8.9
+## What's New in v2.9.0
 
-- **Hardened ad blocking** — blocks YouTube feed and video ads, plus movie/anime popups and ad navigation.
-- **Per-tab history** — YouTube Music keeps its own back/forward history, independent of the other tabs.
-- **UI polish** — bottom-bar icons scale responsively; lock icons adapt to the active theme.
-- **Playback fix** — paused videos no longer resume when the app returns from the background.
+- **Adblock fix** — clear the YouTube Music promo backdrop that blocks taps.
 
 ## Download & Install
 
 Grab the latest signed APK from the **[Releases page](https://github.com/Isaac-1555/MyTube_Android/releases/latest)**.
 
-Direct download: **[MyTube-v2.8.9-release.apk](https://github.com/Isaac-1555/MyTube_Android/releases/download/v2.8.9/MyTube-v2.8.9-release.apk)**
+Direct download: **[MyTube-v2.9.0-release.apk](https://github.com/Isaac-1555/MyTube_Android/releases/download/v2.9.0/MyTube-v2.9.0-release.apk)**
 
 ### Install on Android
 
@@ -81,7 +78,7 @@ Direct download: **[MyTube-v2.8.9-release.apk](https://github.com/Isaac-1555/MyT
 ### Install with ADB
 
 ```bash
-adb install MyTube-v2.8.9-release.apk
+adb install MyTube-v2.9.0-release.apk
 ```
 
 ### Requirements
@@ -92,7 +89,7 @@ adb install MyTube-v2.8.9-release.apk
 ### Verify the download (optional)
 
 ```bash
-apksigner verify --print-certs MyTube-v2.8.9-release.apk
+apksigner verify --print-certs MyTube-v2.9.0-release.apk
 ```
 
 The release is signed with APK Signature Scheme v2. Certificate SHA-256:
@@ -174,6 +171,10 @@ Then build:
 `keystore.properties`, `*.jks` and `*.keystore` are git-ignored — never commit your signing keys.
 
 ## Changelog
+
+### v2.9.0 — 2026-10-17
+
+- Adblock: clear YT Music promo backdrop that blocks taps
 
 ### v2.8.9 — 2026-10-08
 
