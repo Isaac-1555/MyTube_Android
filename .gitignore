@@ -19,3 +19,11 @@ mytube-release.jks
 keystore.properties
 *.jks
 *.keystore
+
+# Release artefacts are built locally and uploaded to GitHub Releases, never
+# committed. /build already covers the Gradle outputs; this is the copy the
+# release script drops at the repo root.
+*.apk
+
+# IDE
+/.idea/
