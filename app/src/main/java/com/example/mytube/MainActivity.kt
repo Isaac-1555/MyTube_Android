@@ -12,16 +12,21 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModelProvider
+import com.example.mytube.browser.VideoFullscreenController
 import com.example.mytube.ui.BrowserScreen
 import com.example.mytube.ui.SettingsSheet
 import com.example.mytube.ui.theme.MyTubeTheme
@@ -32,6 +37,7 @@ import com.example.mytube.viewmodel.SettingsViewModel
 class MainActivity : ComponentActivity() {
     private lateinit var browserViewModel: BrowserViewModel
     private lateinit var settingsViewModel: SettingsViewModel
+    private lateinit var fullscreenController: VideoFullscreenController
 
     private var isInPipMode by mutableStateOf(false)
 
@@ -46,11 +52,25 @@ class MainActivity : ComponentActivity() {
         browserViewModel = ViewModelProvider(this)[BrowserViewModel::class.java]
         settingsViewModel = ViewModelProvider(this)[SettingsViewModel::class.java]
 
+        fullscreenController = VideoFullscreenController(
+            activity = this,
+            webViewManager = browserViewModel.webViewManager,
+            nativeFullscreenEnabled = { settingsViewModel.nativeVideoFullscreen.value }
+        )
+        browserViewModel.webViewManager.onCustomViewShown = {
+            fullscreenController.onNativeFullscreenShown()
+        }
+        browserViewModel.webViewManager.onCustomViewHidden = {
+            fullscreenController.onNativeFullscreenHidden()
+        }
+
         browserViewModel.onSleepTimerFired = {
+            fullscreenController.reset()
             finishAffinity()
         }
 
         browserViewModel.onExitApp = {
+            fullscreenController.reset()
             finishAffinity()
         }
 
@@ -64,6 +84,9 @@ class MainActivity : ComponentActivity() {
                     return
                 }
                 when {
+                    // Fullscreen first. Without this branch there is no way out of a
+                    // forced-landscape video except rotating the phone.
+                    fullscreenController.isFullscreenActive -> fullscreenController.exitByUser()
                     browserViewModel.isLocked.value -> Unit
                     browserViewModel.webViewManager.canGoBack -> browserViewModel.goBack()
                     else -> browserViewModel.requestExit()
@@ -75,12 +98,26 @@ class MainActivity : ComponentActivity() {
             MyTubeTheme {
                 var showSettings by remember { mutableStateOf(false) }
 
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                val fullscreenActive = fullscreenController.isFullscreenActive
+
+                Scaffold(
+                    modifier = Modifier.fillMaxSize(),
+                    contentWindowInsets = if (fullscreenActive) {
+                        WindowInsets(0, 0, 0, 0)
+                    } else {
+                        WindowInsets.systemBars
+                    }
+                ) { innerPadding ->
                     BrowserScreen(
                         viewModel = browserViewModel,
                         onSettingsClick = { showSettings = true },
                         isInPipMode = isInPipMode,
-                        modifier = Modifier.padding(innerPadding)
+                        fullscreenController = fullscreenController,
+                        modifier = Modifier.padding(if (fullscreenActive) {
+                            PaddingValues(0.dp)
+                        } else {
+                            innerPadding
+                        })
                     )
                 }
 
@@ -94,9 +131,30 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        // configChanges in the manifest covers orientation, so the Activity is never
+        // recreated and this is the only place a rotation becomes visible natively.
+        fullscreenController.reassertIfActive()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) fullscreenController.reassertIfActive()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        // Never leave the app pinned to landscape with the bars hidden.
+        if (::fullscreenController.isInitialized) fullscreenController.reset()
+    }
+
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         isInPipMode = isInPictureInPictureMode
+        if (isInPictureInPictureMode && ::fullscreenController.isInitialized) {
+            fullscreenController.reset()
+        }
         browserViewModel.webViewManager.setVideoOnlyMode(isInPictureInPictureMode)
     }
 
@@ -125,10 +183,11 @@ class MainActivity : ComponentActivity() {
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
             !isInPictureInPictureMode
         if (wantsPip) {
-            if (!wm.isFullscreen) {
-                wm.scrollVideoIntoView()
-                wm.setVideoOnlyMode(true)
-            }
+            // Landscape fullscreen and PiP both want the window. PiP wins, so tear
+            // fullscreen down before handing the surface over.
+            fullscreenController.reset()
+            wm.scrollVideoIntoView()
+            wm.setVideoOnlyMode(true)
             val params = PictureInPictureParams.Builder()
                 .setAspectRatio(Rational(Constants.PIP_RATIO_WIDTH, Constants.PIP_RATIO_HEIGHT))
                 .build()

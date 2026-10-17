@@ -1,5 +1,6 @@
 package com.example.mytube.ui
 
+import android.content.res.Configuration
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
@@ -31,6 +32,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.systemGestureExclusion
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bedtime
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Refresh
@@ -47,6 +49,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -57,8 +60,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
@@ -66,6 +71,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.example.mytube.R
 import com.example.mytube.browser.BrowserMode
+import com.example.mytube.browser.FullscreenDecision
+import com.example.mytube.browser.FullscreenInputs
+import com.example.mytube.browser.FullscreenResolver
+import com.example.mytube.browser.VideoFullscreenController
 import com.example.mytube.ui.components.BrowserWebView
 import com.example.mytube.util.Constants
 import com.example.mytube.viewmodel.BrowserViewModel
@@ -78,6 +87,7 @@ fun BrowserScreen(
     viewModel: BrowserViewModel,
     onSettingsClick: () -> Unit,
     isInPipMode: Boolean,
+    fullscreenController: VideoFullscreenController,
     modifier: Modifier = Modifier
 ) {
     val mgr = viewModel.webViewManager
@@ -85,6 +95,8 @@ fun BrowserScreen(
     val isLocked by viewModel.isLocked.collectAsState()
     val showExitDialog by viewModel.showExitDialog.collectAsState()
     val autoHideBar by viewModel.autoHideBar.collectAsState()
+    val rotateFullscreenMode by viewModel.rotateFullscreenMode.collectAsState()
+    val videoState = mgr.videoState
     val showYoutubeLink by viewModel.showYoutubeLink.collectAsState()
     val showMusicLink by viewModel.showMusicLink.collectAsState()
     val showMoviesLink by viewModel.showMoviesLink.collectAsState()
@@ -100,8 +112,36 @@ fun BrowserScreen(
     var controlsVisible by remember { mutableStateOf(true) }
     var interactionTick by remember { mutableStateOf(0) }
 
+    val isLandscape =
+        LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+
+    val decision = FullscreenResolver.resolve(
+        FullscreenInputs(
+            pref = rotateFullscreenMode,
+            mode = activeMode,
+            video = videoState,
+            isLandscape = isLandscape,
+            isPip = isInPipMode,
+            isLocked = isLocked,
+            nativeFullscreen = isFullscreen
+        )
+    )
+
+    // Keyed on the *decision*, never on the configuration. Hiding the system bars
+    // changes insets, which recomposes this composable; keying on the configuration
+    // would re-enter entry/exit forever.
+    LaunchedEffect(decision, isLandscape) {
+        fullscreenController.apply(decision, isLandscape)
+    }
+
+    DisposableEffect(Unit) {
+        onDispose { fullscreenController.reset() }
+    }
+
+    val fullscreenActive = fullscreenController.isFullscreenActive
+
     LaunchedEffect(autoHideBar, interactionTick) {
-        if (!autoHideBar) {
+        if (!autoHideBar || fullscreenActive) {
             controlsVisible = true
         } else {
             delay(BOTTOM_BAR_HIDE_DELAY_MS)
@@ -121,7 +161,7 @@ fun BrowserScreen(
             }
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            if (!isInPipMode) {
+            if (!isInPipMode && !fullscreenActive) {
                 AnimatedVisibility(visible = mgr.isLoading) {
                     LinearProgressIndicator(
                         progress = { mgr.progress / 100f },
@@ -132,7 +172,7 @@ fun BrowserScreen(
 
             Box(modifier = Modifier.weight(1f)) {
                 BrowserWebView(webViewManager = mgr)
-                if (!isInPipMode) {
+                if (!isInPipMode && !fullscreenActive) {
                     SwipeEdge(
                         side = SwipeEdgeSide.Start,
                         onSwipe = {
@@ -150,7 +190,7 @@ fun BrowserScreen(
                 }
             }
 
-            if (!isInPipMode) {
+            if (!isInPipMode && !fullscreenActive) {
                 AnimatedVisibility(
                     visible = controlsVisible,
                     enter = fadeIn(tween(200)) + expandVertically(expandFrom = Alignment.Bottom),
@@ -185,6 +225,17 @@ fun BrowserScreen(
             }
         }
 
+        // Deliberately not a tap-to-exit gesture: YouTube owns single-tap (play/pause)
+        // and double-tap (seek), and intercepting either would break them.
+        if (fullscreenActive && !isInPipMode) {
+            FullscreenExitChip(
+                onClick = { fullscreenController.exitByUser() },
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 48.dp, end = 16.dp)
+            )
+        }
+
         if (showExitDialog) {
             AlertDialog(
                 onDismissRequest = { viewModel.dismissExitDialog() },
@@ -199,18 +250,10 @@ fun BrowserScreen(
             )
         }
 
-        if (isLocked && !isInPipMode) {
+        if (isLocked && !isInPipMode && !fullscreenActive) {
             LockOverlay(modifier = Modifier.fillMaxSize())
             LockChip(
                 locked = true,
-                onToggle = { viewModel.toggleLock() },
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(16.dp)
-            )
-        } else if (!isLocked && isFullscreen && !isInPipMode) {
-            LockChip(
-                locked = false,
                 onToggle = { viewModel.toggleLock() },
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
@@ -383,6 +426,26 @@ private fun LockOverlay(modifier: Modifier = Modifier) {
                 }
             }
     )
+}
+
+@Composable
+private fun FullscreenExitChip(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    IconButton(
+        onClick = onClick,
+        modifier = modifier
+            .size(40.dp)
+            .background(Color.Black.copy(alpha = 0.45f), CircleShape)
+    ) {
+        Icon(
+            imageVector = Icons.Default.Close,
+            contentDescription = "Exit fullscreen",
+            tint = Color.White,
+            modifier = Modifier.size(20.dp)
+        )
+    }
 }
 
 @Composable

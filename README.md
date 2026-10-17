@@ -52,11 +52,23 @@
 - **Rich media controls** — play/pause, real previous/next, stop and artwork-driven tint in the notification and on the lock screen (Android 13+).
 - **Home-screen widget** — add the MyTube widget to your launcher for artwork, title and transport controls without opening the app.
 - **Picture-in-Picture** — manual PiP and optional auto-PiP when you leave the app; page chrome is hidden so only the video shows.
+- **Rotate to fullscreen landscape** — turn the phone while a YouTube video is playing and the video fills the screen in landscape, with the system bars and page chrome hidden. Rotating back returns to portrait.
 - **Sleep timer** — 1 to 120 minutes with a snap wheel; the app closes itself when the timer ends.
 - **Screen lock** — freeze the page and ignore touches, ideal when handing the phone to someone.
 - **Edge-swipe navigation** — swipe from the left edge to go back, right edge to go forward.
 - **Auto-hide bottom bar** — the bar fades away after 5s of inactivity and returns on touch.
 - **Configurable sources** — if a Movies/Anime mirror rotates or goes down, paste a new home URL in Settings.
+
+## What's New in v2.10.0
+
+- **Rotate to fullscreen landscape** — play a YouTube video, turn the phone, and the video goes edge-to-edge in landscape with the status bar, navigation bar and the YouTube masthead all hidden. Turn it back and you land in portrait again.
+- **Three modes in Settings** — **Off**, **Rotate to landscape** (default), or **Always landscape** if you would rather it stay in fullscreen for the whole video, YouTube-app style.
+- **Native fullscreen (experimental)** — an opt-in switch that uses the browser's own fullscreen API. Android WebView gates that behind a real touch gesture and often refuses, so MyTube falls back to the built-in fullscreen automatically when it does.
+- **Reliable exit** — the corner **✕**, the back button, rotating to portrait, switching tabs, leaving the app and entering PiP all leave fullscreen cleanly. You can't get stranded in landscape.
+- **Fullscreen on the YouTube tab only** — Movies and Anime mirrors use unrelated players, so they keep their normal layout.
+
+> Previous attempts at this relied on the browser's `screen.orientation.lock()` and `requestFullscreen()`. Both are gated behind a transient user gesture inside WebView, which is why they only worked occasionally. This release decides everything natively and never asks the page for permission.
+
 
 ## What's New in v2.9.2
 
@@ -70,7 +82,7 @@
 
 Grab the latest signed APK from the **[Releases page](https://github.com/Isaac-1555/MyTube_Android/releases/latest)**.
 
-Direct download: **[MyTube-v2.9.2-release.apk](https://github.com/Isaac-1555/MyTube_Android/releases/download/v2.9.2/MyTube-v2.9.2-release.apk)**
+Direct download: **[MyTube-v2.10.0-release.apk](https://github.com/Isaac-1555/MyTube_Android/releases/download/v2.10.0/MyTube-v2.10.0-release.apk)**
 
 ### Install on Android
 
@@ -83,7 +95,7 @@ Direct download: **[MyTube-v2.9.2-release.apk](https://github.com/Isaac-1555/MyT
 ### Install with ADB
 
 ```bash
-adb install MyTube-v2.9.2-release.apk
+adb install MyTube-v2.10.0-release.apk
 ```
 
 ### Requirements
@@ -94,7 +106,7 @@ adb install MyTube-v2.9.2-release.apk
 ### Verify the download (optional)
 
 ```bash
-apksigner verify --print-certs MyTube-v2.9.2-release.apk
+apksigner verify --print-certs MyTube-v2.10.0-release.apk
 ```
 
 The release is signed with APK Signature Scheme v2. Certificate SHA-256:
@@ -123,6 +135,7 @@ The bottom bar is the only chrome the app draws — everything above it is the r
 
 - **Go back / forward** — swipe in from the left or right edge of the screen.
 - **Exit** — swiping back from your first page shows an *Exit MyTube?* dialog.
+- **Fullscreen** — with a YouTube video playing, rotate the phone to fill the screen in landscape. Rotate back to leave, or use the corner **✕** / the back button.
 - **Picture-in-Picture** — leave the app to enter PiP (enable **Auto PiP** in Settings), or use the system gesture.
 - **Bottom bar** — hides after 5 seconds when **Auto-hide Bottom Bar** is enabled; tap anywhere to bring it back.
 - **Hiding link buttons** — each site button (YouTube, YouTube Music, Movies, Anime) can be switched off individually in Settings. The button for the tab you are currently on always stays visible, so you can never get stranded on a hidden tab.
@@ -135,6 +148,8 @@ The bottom bar is the only chrome the app draws — everything above it is the r
 | **Auto PiP** | Automatically enter Picture-in-Picture when you leave the app |
 | **Ad Blocking** | Enable hosts + scriptlet based ad blocking |
 | **Auto-hide Bottom Bar** | Hide the bottom controls after a few seconds of inactivity |
+| **Video Fullscreen** | `Off`, `Rotate to landscape` (default) or `Always landscape` |
+| **Use native video fullscreen** | Experimental: use the browser's own fullscreen API, with an automatic fallback |
 | **YouTube Button** | Show the YouTube link in the bottom bar |
 | **YouTube Music Button** | Show the YouTube Music link in the bottom bar |
 | **Movies Button** | Show the Movies link in the bottom bar |
@@ -181,6 +196,23 @@ Then build:
 `keystore.properties`, `*.jks` and `*.keystore` are git-ignored — never commit your signing keys.
 
 ## Changelog
+
+### v2.10.0 — 2026-10-17
+
+- Feature: rotate-to-fullscreen landscape for YouTube video, decided natively rather than through the web fullscreen API
+- Feature: `Off` / `Rotate to landscape` / `Always landscape` setting, plus an opt-in native-fullscreen switch
+- Feature: fullscreen exit via the corner ✕, the back button, rotation to portrait, tab switch, app backgrounding and PiP entry
+- Browser: hide everything outside the player element in fullscreen instead of relying on a selector list or a z-index contest
+- Browser: unify the PiP and fullscreen stylesheets into one `<style>` element; they previously both pinned the player with `!important` and fought over it
+- Browser: report video presence, watch-page and playback state from the page, pushing on `play`/`pause`/`yt-navigate-finish` instead of a 1.5s poll
+- Browser: keep the fullscreen CSS pinned through a `MutationObserver` so YouTube re-renders cannot wipe it mid-rotation
+- Browser: address fullscreen teardown to a specific tab rather than the active one, so switching tabs mid-fullscreen cannot strand the CSS
+- Fix: `WebViewManager.isFullscreen` read a non-observable field, so nothing observing it ever recomposed
+- Fix: wire up `hideCustomView()`, which was defined but never called, and add a fullscreen branch to the back handler
+- Fix: pin orientation before hiding the system bars; the previous order was undone by the orientation relayout
+- Fix: re-hide the system bars on a guarded poll, since a matching requested orientation dispatches no configuration change at all
+- Use the compat insets accessor; the platform `WindowInsets.isVisible` needs API 30 while the app supports 24
+- Tests: 22 unit tests over the fullscreen decision matrix
 
 ### v2.9.2 — 2026-10-17
 

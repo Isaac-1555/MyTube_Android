@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.mytube.MyTubeApplication
+import com.example.mytube.browser.RotateFullscreenMode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -21,6 +22,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     val adblockEnabled: StateFlow<Boolean> = container.prefsManager.adblockEnabled
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
     val autoHideBar: StateFlow<Boolean> = container.prefsManager.autoHideBar
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    val rotateFullscreenMode: StateFlow<RotateFullscreenMode> = container.prefsManager.rotateFullscreenMode
+        .stateIn(viewModelScope, SharingStarted.Eagerly, RotateFullscreenMode.DEFAULT)
+    val nativeVideoFullscreen: StateFlow<Boolean> = container.prefsManager.nativeVideoFullscreen
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
     val showYoutubeLink: StateFlow<Boolean> = container.prefsManager.showYoutubeLink
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
@@ -56,6 +61,14 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun setAutoHideBar(enabled: Boolean) {
         viewModelScope.launch { container.prefsManager.setAutoHideBar(enabled) }
+    }
+
+    fun setRotateFullscreenMode(mode: RotateFullscreenMode) {
+        viewModelScope.launch { container.prefsManager.setRotateFullscreenMode(mode) }
+    }
+
+    fun setNativeVideoFullscreen(enabled: Boolean) {
+        viewModelScope.launch { container.prefsManager.setNativeVideoFullscreen(enabled) }
     }
 
     fun setShowYoutubeLink(enabled: Boolean) {

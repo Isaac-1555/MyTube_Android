@@ -16,6 +16,12 @@ class ScriptManager(
             }
             injector(script.source, time)
         }
+        // video_state.js owns every fullscreen <style> block and reports video state
+        // back to Kotlin. It must be unconditional: the rotate-to-fullscreen feature
+        // cannot depend on the background-playback pref.
+        loadAsset("scripts/video_state.js")?.let {
+            injector(it, InjectionTime.AT_DOCUMENT_END)
+        }
         if (!includeBgPlayback) return
         val bgSource = loadAsset("scripts/background_playback.js") ?: return
         injector(bgSource, InjectionTime.AT_DOCUMENT_END)

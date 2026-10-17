@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.mytube.MyTubeApplication
 import com.example.mytube.browser.BrowserMode
+import com.example.mytube.browser.RotateFullscreenMode
 import com.example.mytube.browser.isYoutubeFamily
 import com.example.mytube.util.Constants
 import kotlinx.coroutines.Dispatchers
@@ -65,6 +66,14 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     )
 
     val autoHideBar = prefsManager.autoHideBar.stateIn(
+        viewModelScope, SharingStarted.Eagerly, false
+    )
+
+    val rotateFullscreenMode = prefsManager.rotateFullscreenMode.stateIn(
+        viewModelScope, SharingStarted.Eagerly, RotateFullscreenMode.DEFAULT
+    )
+
+    val nativeVideoFullscreen = prefsManager.nativeVideoFullscreen.stateIn(
         viewModelScope, SharingStarted.Eagerly, false
     )
 

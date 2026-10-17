@@ -1,5 +1,6 @@
 package com.example.mytube.ui
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -8,6 +9,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -28,6 +30,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
+import com.example.mytube.browser.RotateFullscreenMode
 import com.example.mytube.viewmodel.SettingsViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -41,6 +44,8 @@ fun SettingsSheet(
     val autoPip by viewModel.autoPip.collectAsState()
     val adblockEnabled by viewModel.adblockEnabled.collectAsState()
     val autoHideBar by viewModel.autoHideBar.collectAsState()
+    val rotateFullscreenMode by viewModel.rotateFullscreenMode.collectAsState()
+    val nativeVideoFullscreen by viewModel.nativeVideoFullscreen.collectAsState()
     val showYoutubeLink by viewModel.showYoutubeLink.collectAsState()
     val showMusicLink by viewModel.showMusicLink.collectAsState()
     val showMoviesLink by viewModel.showMoviesLink.collectAsState()
@@ -77,6 +82,32 @@ fun SettingsSheet(
                 SettingsToggle("Auto-hide Bottom Bar", autoHideBar) {
                     viewModel.setAutoHideBar(it)
                 }
+                Spacer(Modifier.height(8.dp))
+                HorizontalDivider()
+                Spacer(Modifier.height(8.dp))
+                Text("Video Fullscreen", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "Rotating with a YouTube video playing opens it fullscreen in landscape. Rotating back returns to portrait.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(8.dp))
+                RotateFullscreenPicker(
+                    selected = rotateFullscreenMode,
+                    onSelect = { viewModel.setRotateFullscreenMode(it) }
+                )
+                Spacer(Modifier.height(4.dp))
+                SettingsToggle("Use native video fullscreen", nativeVideoFullscreen) {
+                    viewModel.setNativeVideoFullscreen(it)
+                }
+                Text(
+                    "Experimental. Uses the browser's own fullscreen API, which Android WebView gates behind a real touch gesture and often refuses. Falls back to the built-in fullscreen automatically.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(8.dp))
+                HorizontalDivider()
+                Spacer(Modifier.height(8.dp))
                 SettingsToggle("YouTube Button", showYoutubeLink) {
                     viewModel.setShowYoutubeLink(it)
                 }
@@ -150,6 +181,31 @@ private fun SourceUrlField(
                     onSave()
                 }
             ) { Text("Reset to default") }
+        }
+    }
+}
+
+@Composable
+private fun RotateFullscreenPicker(
+    selected: RotateFullscreenMode,
+    onSelect: (RotateFullscreenMode) -> Unit
+) {
+    val options = listOf(
+        RotateFullscreenMode.OFF to "Off",
+        RotateFullscreenMode.ON_ROTATE to "Rotate to landscape",
+        RotateFullscreenMode.ALWAYS to "Always landscape"
+    )
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        options.forEach { (mode, label) ->
+            FilterChip(
+                selected = mode == selected,
+                onClick = { onSelect(mode) },
+                label = { Text(label, style = MaterialTheme.typography.labelMedium) },
+                modifier = Modifier.weight(1f)
+            )
         }
     }
 }

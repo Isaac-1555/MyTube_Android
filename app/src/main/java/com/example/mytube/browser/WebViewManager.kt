@@ -91,6 +91,15 @@ class WebViewManager {
         BrowserMode.ANIME -> animeWebView
     }
 
+    /** Address a specific tab. Cleanup must never go through "active" — after a tab
+     *  switch the active WebView is the wrong document and the teardown strands. */
+    fun webViewFor(mode: BrowserMode): WebView? = when (mode) {
+        BrowserMode.YOUTUBE -> webView
+        BrowserMode.MUSIC -> musicWebView
+        BrowserMode.MOVIES -> moviesWebView
+        BrowserMode.ANIME -> animeWebView
+    }
+
     private val _currentUrl = mutableStateOf(Constants.YOUTUBE_HOME)
     var currentUrl: String
         get() = _currentUrl.value
@@ -152,8 +161,22 @@ class WebViewManager {
         get() = _fullscreenView.value
         private set(value) { _fullscreenView.value = value }
 
+    /**
+     * Reads the Compose-observable state, not the raw [customView] field. Reading the
+     * plain field meant nothing that observed this ever recomposed.
+     */
     val isFullscreen: Boolean
-        get() = customView != null
+        get() = _fullscreenView.value != null
+
+    private val _videoState = mutableStateOf(VideoState())
+    val videoState: VideoState
+        get() = _videoState.value
+
+    /** Fired when the page enters real (custom view) fullscreen. */
+    var onCustomViewShown: (() -> Unit)? = null
+
+    /** Fired when the page leaves real (custom view) fullscreen. */
+    var onCustomViewHidden: (() -> Unit)? = null
 
     private inner class PlaybackBridge {
         @JavascriptInterface
@@ -167,6 +190,27 @@ class WebViewManager {
             canPrev: Boolean
         ) {
             onPlaybackUpdate?.invoke(playing, title, duration, currentTime, artUrl, canNext, canPrev)
+        }
+
+        @JavascriptInterface
+        fun onVideoStateChanged(hasVideo: Boolean, isWatchPage: Boolean, playing: Boolean) {
+            val next = VideoState(hasVideo, isWatchPage, playing)
+            if (next != _videoState.value) _videoState.value = next
+        }
+
+        @JavascriptInterface
+        fun onFullscreenCssApplied(applied: Boolean) {
+            Log.d(TAG, "fullscreen CSS applied=$applied")
+        }
+
+        @JavascriptInterface
+        fun onFullscreenCssAudit(audit: String) {
+            Log.d(TAG, "chrome: $audit")
+        }
+
+        @JavascriptInterface
+        fun onNativeFullscreenAttempt(tier: String) {
+            Log.d(TAG, "native fullscreen attempt tier=$tier")
         }
     }
 
@@ -371,6 +415,7 @@ class WebViewManager {
                     customView = view
                     customViewCallback = callback
                     _fullscreenView.value = view
+                    onCustomViewShown?.invoke()
                 }
 
                 override fun onHideCustomView() {
@@ -378,6 +423,7 @@ class WebViewManager {
                     customView = null
                     customViewCallback = null
                     _fullscreenView.value = null
+                    onCustomViewHidden?.invoke()
                 }
 
                 override fun onCreateWindow(
@@ -409,7 +455,10 @@ class WebViewManager {
         customViewCallback?.onCustomViewHidden()
         customView = null
         customViewCallback = null
-        _fullscreenView.value = null
+        if (_fullscreenView.value != null) {
+            _fullscreenView.value = null
+            onCustomViewHidden?.invoke()
+        }
     }
 
     companion object {
@@ -603,40 +652,53 @@ class WebViewManager {
     /**
      * While in PiP, strip the page down to just the video player so the
      * PiP window doesn't show the page's responsive sidebar/header layout.
+     *
+     * The CSS itself now lives in video_state.js and shares one <style> element with
+     * the rotate-fullscreen mode; two separate blocks both pinned .html5-video-player
+     * with !important and fought over it.
      */
     fun setVideoOnlyMode(enabled: Boolean) {
         if (videoOnlyMode == enabled) return
         videoOnlyMode = enabled
-        if (enabled) {
-            evaluateJs(
-                "(function(){if(!document.querySelector('video'))return;" +
-                    "var s=document.getElementById('mytube-pip-video-only');" +
-                    "if(!s){s=document.createElement('style');" +
-                    "s.id='mytube-pip-video-only';" +
-                    "document.documentElement.appendChild(s);}" +
-                    "s.textContent='html,body{background:#000!important;overflow:hidden!important}" +
-                    "body *{visibility:hidden!important}" +
-                    "video,.html5-video-player,.html5-video-player *{visibility:visible!important}" +
-                    ".html5-video-player{position:fixed!important;top:0!important;left:0!important;" +
-                    "width:100vw!important;height:100vh!important;z-index:2147483647!important;" +
-                    "background:#000!important}';})()"
-            )
-        } else {
-            evaluateJs(
-                "(function(){var s=document.getElementById('mytube-pip-video-only');" +
-                    "if(s&&s.parentNode){s.parentNode.removeChild(s);}})()"
-            )
-        }
+        evaluateJs(
+            "(function(){var s=document.getElementById('mytube-pip-video-only');" +
+                "if(s&&s.parentNode){s.parentNode.removeChild(s);}" +
+                "window.MyTubeSetPipMode&&window.MyTubeSetPipMode($enabled);})()"
+        )
+    }
+
+    /** Rotate-to-fullscreen CSS. Always addressed to a specific tab, never "active". */
+    fun setFullscreenCss(mode: BrowserMode, enabled: Boolean) {
+        evaluateJsIn(
+            mode,
+            "window.MyTubeSetFsCss&&window.MyTubeSetFsCss($enabled)"
+        )
+    }
+
+    fun tryNativeFullscreen(mode: BrowserMode) {
+        evaluateJsIn(mode, "window.MyTubeTryNativeFullscreen&&window.MyTubeTryNativeFullscreen()")
+    }
+
+    fun exitNativeFullscreen(mode: BrowserMode) {
+        evaluateJsIn(mode, "window.MyTubeExitNativeFullscreen&&window.MyTubeExitNativeFullscreen()")
     }
 
     fun evaluateJs(script: String) {
         activeWebView()?.evaluateJavascript(script, null)
     }
 
+    fun evaluateJsIn(mode: BrowserMode, script: String) {
+        webViewFor(mode)?.evaluateJavascript(script, null)
+    }
+
     private val mainHandler = Handler(Looper.getMainLooper())
 
     fun evaluateJsFromMainThread(script: String) {
         mainHandler.post { activeWebView()?.evaluateJavascript(script, null) }
+    }
+
+    fun evaluateJsInFromMainThread(mode: BrowserMode, script: String) {
+        mainHandler.post { webViewFor(mode)?.evaluateJavascript(script, null) }
     }
 
     fun destroy() {
