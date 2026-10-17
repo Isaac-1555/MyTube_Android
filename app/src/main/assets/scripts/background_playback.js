@@ -228,7 +228,7 @@
         var artUrl = getArtUrl();
         var canNext = hasNext();
         var canPrev = hasPrev();
-        var key = (!!v.paused) + '|' + title + '|' + (v.duration | 0) + '|' + Math.floor(v.currentTime / 10) +
+        var key = (!!v.paused) + '|' + title + '|' + (v.duration | 0) + '|' + Math.floor(v.currentTime) +
             '|' + artUrl + '|' + canNext + '|' + canPrev;
         if (key === lastReportKey) return;
         lastReportKey = key;

@@ -28,5 +28,6 @@ object Constants {
     const val SWIPE_EDGE_WIDTH_DP = 24
     const val SWIPE_THRESHOLD_DP = 64
     const val ACTION_UPDATE_METADATA = "com.example.mytube.action.UPDATE_METADATA"
+    const val MY_TUBE_BROWSER_ROOT = "mytube_root"
     const val WAKE_LOCK_TAG = "mytube:background_playback"
 }

@@ -1,3 +1,9 @@
 <resources>
     <string name="app_name">MyTube</string>
+    <string name="widget_label">MyTube playback</string>
+    <string name="widget_no_track">Nothing playing</string>
+    <string name="widget_artwork_desc">Album artwork</string>
+    <string name="widget_play_pause">Play or pause</string>
+    <string name="widget_next">Next</string>
+    <string name="widget_previous">Previous</string>
 </resources>

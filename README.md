@@ -50,6 +50,7 @@
 - **Ad blocking** — hosts-based blocking plus uBlock-style scriptlets, with a filter list that updates itself.
 - **Background playback** — foreground media service keeps audio running when the screen is off or the app is backgrounded.
 - **Rich media controls** — play/pause, real previous/next, stop and artwork-driven tint in the notification and on the lock screen (Android 13+).
+- **Home-screen widget** — add the MyTube widget to your launcher for artwork, title and transport controls without opening the app.
 - **Picture-in-Picture** — manual PiP and optional auto-PiP when you leave the app; page chrome is hidden so only the video shows.
 - **Sleep timer** — 1 to 120 minutes with a snap wheel; the app closes itself when the timer ends.
 - **Screen lock** — freeze the page and ignore touches, ideal when handing the phone to someone.
@@ -57,15 +58,19 @@
 - **Auto-hide bottom bar** — the bar fades away after 5s of inactivity and returns on touch.
 - **Configurable sources** — if a Movies/Anime mirror rotates or goes down, paste a new home URL in Settings.
 
-## What's New in v2.9.0
+## What's New in v2.9.2
 
-- **Adblock fix** — clear the YouTube Music promo backdrop that blocks taps.
+- **Home-screen media widget** — add the MyTube widget to your launcher for artwork, title, previous/play-pause/next, without opening the app.
+- **Android now recognises MyTube as a media app** — the playback service is a real `MediaBrowserService`, so SystemUI media controls, Bluetooth/headset buttons and the lock screen all drive playback.
+- **Media controls fixed** — the session now publishes its state as soon as it starts (previously it went active with no state, which Android ignored), reports a zero playback rate while paused so the scrubber stops drifting, and advertises a play/pause action.
+- **Smoother scrubber** — playback position advances every second instead of every ten, so the progress bar moves continuously.
+- **Notification polish** — tapping the notification opens the app, and it now shows playback progress without re-alerting on every update.
 
 ## Download & Install
 
 Grab the latest signed APK from the **[Releases page](https://github.com/Isaac-1555/MyTube_Android/releases/latest)**.
 
-Direct download: **[MyTube-v2.9.0-release.apk](https://github.com/Isaac-1555/MyTube_Android/releases/download/v2.9.0/MyTube-v2.9.0-release.apk)**
+Direct download: **[MyTube-v2.9.2-release.apk](https://github.com/Isaac-1555/MyTube_Android/releases/download/v2.9.2/MyTube-v2.9.2-release.apk)**
 
 ### Install on Android
 
@@ -78,7 +83,7 @@ Direct download: **[MyTube-v2.9.0-release.apk](https://github.com/Isaac-1555/MyT
 ### Install with ADB
 
 ```bash
-adb install MyTube-v2.9.0-release.apk
+adb install MyTube-v2.9.2-release.apk
 ```
 
 ### Requirements
@@ -89,7 +94,7 @@ adb install MyTube-v2.9.0-release.apk
 ### Verify the download (optional)
 
 ```bash
-apksigner verify --print-certs MyTube-v2.9.0-release.apk
+apksigner verify --print-certs MyTube-v2.9.2-release.apk
 ```
 
 The release is signed with APK Signature Scheme v2. Certificate SHA-256:
@@ -177,6 +182,18 @@ Then build:
 
 ## Changelog
 
+### v2.9.2 — 2026-10-17
+
+- Playback: promote the service to `MediaBrowserService` so Android treats MyTube as a media app
+- Playback: publish playback state and metadata as soon as the session starts, not only on the first metadata update
+- Playback: report a 0f rate while paused so the system scrubber stops drifting forward
+- Playback: advertise `ACTION_PLAY_PAUSE` so SystemUI renders the toggle
+- Playback: extrapolate the position from the last WebView sample between reports
+- Playback: register `MediaButtonReceiver` and handle `MEDIA_BUTTON`; keep playing when the task is swiped away
+- Playback: add a home-screen widget with artwork, title and previous/play-pause/next
+- Notification: add a content intent, progress bar and alert-once behaviour
+- Playback: report position every second instead of every ten
+
 ### v2.9.0 — 2026-10-17
 
 - Adblock: clear YT Music promo backdrop that blocks taps
@@ -202,7 +219,7 @@ Then build:
 
 - **Kotlin** + **Jetpack Compose** (Material 3) UI
 - **AndroidX WebKit** WebViews with per-tab profiles
-- **MediaSession / PlaybackService** foreground service for playback controls
+- **MediaSession / MediaBrowserService** foreground service, so Android, Bluetooth and the widget can all drive playback
 - **DataStore** preferences and **Room**-backed script storage
 - **Palette** for artwork-tinted media controls
 - Gradle **9.7.1**, Android Gradle Plugin **9.4.1**

@@ -1,7 +1,6 @@
 package com.example.mytube.player
 
 import android.app.PendingIntent
-import android.app.Service
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -12,14 +11,17 @@ import android.media.AudioManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
-import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
+import android.os.SystemClock
+import android.support.v4.media.MediaBrowserCompat
+import android.support.v4.media.MediaDescriptionCompat
 import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
 import android.util.LruCache
 import androidx.core.app.NotificationCompat
+import androidx.media.MediaBrowserServiceCompat
 import androidx.palette.graphics.Palette
 import com.example.mytube.MainActivity
 import com.example.mytube.MyTubeApplication
@@ -32,13 +34,15 @@ import kotlinx.coroutines.launch
 import java.net.HttpURLConnection
 import java.net.URL
 
-class PlaybackService : Service() {
+class PlaybackService : MediaBrowserServiceCompat() {
     private var mediaSession: MediaSessionCompat? = null
+    private var sessionActivity: PendingIntent? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var isPlaying = false
     private var currentTitle = "MyTube"
     private var currentDuration = 0L
     private var currentPosition = 0L
+    private var positionUpdatedAt = 0L
     private var hasNext = false
     private var hasPrev = false
     private var currentArtUrl: String? = null
@@ -75,8 +79,6 @@ class PlaybackService : Service() {
         }
     }
 
-    override fun onBind(intent: Intent?): IBinder? = null
-
     override fun onCreate() {
         super.onCreate()
         val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
@@ -89,6 +91,32 @@ class PlaybackService : Service() {
         }
 
         setupMediaSession()
+    }
+
+    override fun onGetRoot(
+        clientPackageName: String,
+        clientUid: Int,
+        rootHints: Bundle?
+    ): MediaBrowserServiceCompat.BrowserRoot =
+        MediaBrowserServiceCompat.BrowserRoot(Constants.MY_TUBE_BROWSER_ROOT, null)
+
+    override fun onLoadChildren(
+        parentId: String,
+        result: MediaBrowserServiceCompat.Result<List<MediaBrowserCompat.MediaItem>>
+    ) {
+        result.sendResult(listOf(currentBrowserItem()))
+    }
+
+    private fun currentBrowserItem(): MediaBrowserCompat.MediaItem {
+        val description = MediaDescriptionCompat.Builder()
+            .setMediaId(currentArtUrl ?: currentTitle)
+            .setTitle(currentTitle)
+            .setSubtitle(if (isPlaying) "Playing" else "Paused")
+            .build()
+        return MediaBrowserCompat.MediaItem(
+            description,
+            MediaBrowserCompat.MediaItem.FLAG_PLAYABLE
+        )
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -117,6 +145,29 @@ class PlaybackService : Service() {
                 startIdleTimeout()
                 cancelBgPauseTimeout()
             }
+            ACTION_TOGGLE -> {
+                // The widget sends a single toggle because its button reflects
+                // session state that can be a beat behind the service.
+                if (isPlaying) {
+                    isPlaying = false
+                    evaluateJs("window.MyTubePause && window.MyTubePause()")
+                    updatePlaybackState(false)
+                    startWithNotification()
+                    stopHeartbeat()
+                    releaseWakeLock()
+                    startIdleTimeout()
+                    cancelBgPauseTimeout()
+                } else {
+                    isPlaying = true
+                    evaluateJs("window.MyTubePlay && window.MyTubePlay()")
+                    updatePlaybackState(true)
+                    startWithNotification()
+                    acquireWakeLock()
+                    startHeartbeat()
+                    cancelIdleTimeout()
+                    cancelBgPauseTimeout()
+                }
+            }
             ACTION_SKIP_NEXT -> {
                 evaluateJs("window.MyTubeNext && window.MyTubeNext()")
             }
@@ -129,6 +180,7 @@ class PlaybackService : Service() {
                 currentTitle = intent.getStringExtra("title") ?: "MyTube"
                 currentDuration = intent.getLongExtra("duration", 0L)
                 currentPosition = intent.getLongExtra("position", 0L)
+                positionUpdatedAt = SystemClock.elapsedRealtime()
                 hasNext = intent.getBooleanExtra("hasNext", false)
                 hasPrev = intent.getBooleanExtra("hasPrev", false)
 
@@ -208,11 +260,20 @@ class PlaybackService : Service() {
         }
         val pi = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE)
 
+        sessionActivity = pi
+
         mediaSession = MediaSessionCompat(this, "MyTubePlayback").apply {
             setCallback(MediaSessionCallback())
             setSessionActivity(pi)
             isActive = true
         }
+        // Without this, MediaBrowser/MediaController clients have nothing to bind to.
+        setSessionToken(mediaSession!!.sessionToken)
+
+        // An active session with no PlaybackState is ignored by SystemUI, so publish
+        // a valid idle state before the first metadata update ever arrives.
+        updateMediaMetadata()
+        updatePlaybackState(false)
     }
 
     private fun updateMediaMetadata() {
@@ -357,6 +418,12 @@ class PlaybackService : Service() {
                     .setMediaSession(mediaSession?.sessionToken)
             )
             .setOngoing(isPlaying)
+            .setOnlyAlertOnce(true)
+
+        sessionActivity?.let { builder.setContentIntent(it) }
+        if (currentDuration > 0L) {
+            builder.setProgress(currentDuration.toInt(), positionNow().toInt().coerceIn(0, currentDuration.toInt()), isPlaying)
+        }
 
         artBitmap?.let { builder.setLargeIcon(it) }
         if (accentColor != 0) {
@@ -372,17 +439,31 @@ class PlaybackService : Service() {
     private fun skipActions(): Long {
         var actions = PlaybackStateCompat.ACTION_PLAY or
             PlaybackStateCompat.ACTION_PAUSE or
+            PlaybackStateCompat.ACTION_PLAY_PAUSE or
             PlaybackStateCompat.ACTION_STOP
         if (hasNext) actions = actions or PlaybackStateCompat.ACTION_SKIP_TO_NEXT
         if (hasPrev) actions = actions or PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS
         return actions
     }
 
+    // The WebView only reports position while polling, so extrapolate from the
+    // last sample to keep the scrubber monotonic between updates.
+    private fun positionNow(): Long {
+        if (!isPlaying) return currentPosition
+        val elapsed = SystemClock.elapsedRealtime() - positionUpdatedAt
+        val extrapolated = currentPosition + elapsed.coerceAtLeast(0L)
+        return if (currentDuration > 0L) extrapolated.coerceAtMost(currentDuration) else extrapolated
+    }
+
     private fun updatePlaybackState(playing: Boolean) {
         val state = if (playing) PlaybackStateCompat.STATE_PLAYING else PlaybackStateCompat.STATE_PAUSED
+        // A paused session must report a 0f rate, otherwise SystemUI keeps
+        // extrapolating the scrubber forward while nothing is playing.
+        val rate = if (playing) 1f else 0f
         mediaSession?.setPlaybackState(
             PlaybackStateCompat.Builder()
-                .setState(state, currentPosition, 1f)
+                .setState(state, positionNow(), rate)
+                .setBufferedPosition(currentPosition)
                 .setActions(skipActions())
                 .addCustomAction(stopCustomAction())
                 .build()
@@ -474,6 +555,7 @@ class PlaybackService : Service() {
 
     companion object {
         const val ACTION_START = "com.example.mytube.action.START"
+        const val ACTION_TOGGLE = "com.example.mytube.action.TOGGLE"
         const val ACTION_PLAY = "com.example.mytube.action.PLAY"
         const val ACTION_PAUSE = "com.example.mytube.action.PAUSE"
         const val ACTION_STOP = "com.example.mytube.action.STOP"

@@ -32,9 +32,35 @@
         </activity>
 
         <service
-            android:name=".player.PlaybackService"
-            android:foregroundServiceType="mediaPlayback"
-            android:exported="false" />
+        android:name=".player.PlaybackService"
+        android:exported="true"
+        android:foregroundServiceType="mediaPlayback"
+        android:stopWithTask="false"
+        tools:ignore="ExportedService">
+        <intent-filter>
+            <action android:name="android.media.browse.MediaBrowserService" />
+            <action android:name="android.intent.action.MEDIA_BUTTON" />
+        </intent-filter>
+    </service>
+
+    <receiver
+        android:name="androidx.media.session.MediaButtonReceiver"
+        android:exported="true">
+        <intent-filter>
+            <action android:name="android.intent.action.MEDIA_BUTTON" />
+        </intent-filter>
+    </receiver>
+
+    <receiver
+        android:name=".player.PlaybackWidgetProvider"
+        android:exported="true">
+        <intent-filter>
+            <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+        </intent-filter>
+        <meta-data
+            android:name="android.appwidget.provider"
+            android:resource="@xml/widget_playback_info" />
+    </receiver>
     </application>
 
 </manifest>
