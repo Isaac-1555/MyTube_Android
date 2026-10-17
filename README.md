@@ -54,16 +54,30 @@
 - **Picture-in-Picture** — manual PiP and optional auto-PiP when you leave the app; page chrome is hidden so only the video shows.
 - **Rotate to fullscreen landscape** — turn the phone while a YouTube video is playing and the video fills the screen in landscape, with the system bars and page chrome hidden. Rotating back returns to portrait.
 - **Sleep timer** — 1 to 120 minutes with a snap wheel; the app closes itself when the timer ends.
-- **Screen lock** — freeze the page and ignore touches, ideal when handing the phone to someone.
+- **Screen lock** — freeze the page and ignore touches, ideal when handing the phone to someone. Also available from inside fullscreen.
 - **Edge-swipe navigation** — swipe from the left edge to go back, right edge to go forward.
 - **Auto-hide bottom bar** — the bar fades away after 5s of inactivity and returns on touch.
 - **Configurable sources** — if a Movies/Anime mirror rotates or goes down, paste a new home URL in Settings.
 
+## What's New in v2.10.1
+
+A fix release for rotate-to-fullscreen, which shipped in v2.10.0 without a working player UI.
+
+- **The media controls and seek bar actually work now.** They were being covered and hidden by MyTube's own fullscreen styling: the player element was pinned above the mobile-web player's control bar and the whole page was hidden with `visibility`, which also hid the bar underneath it. YouTube's control bar is now stacked above the player and the rest of the page is hidden without touching `visibility`.
+- **Tapping the video no longer drops you out of fullscreen.** Pausing reported "nothing to watch", so MyTube read your own pause as a reason to leave fullscreen. Fullscreen now holds for as long as a watch page has a video, playing or paused.
+- **Double-tap to skip 10 seconds works** — tap the left or right third of the screen to jump back or forward, same as YouTube itself.
+- **A lock button in fullscreen** — top right. YouTube's mobile-web player has no lock control at all, so this is MyTube's: it clears YouTube's controls so you cannot change anything by leaning on the screen, and tapping it again brings them back. The lock is also available inside fullscreen now instead of throwing you back to portrait.
+- **The controls fade again** after a few seconds, as they do on YouTube. A first attempt at the fix above pinned them visible, which is exactly the property YouTube's own fade is built on.
+- **One exit button, not two** — MyTube's corner **✕** now stands down once YouTube is drawing its own fullscreen controls.
+
+Under the hood, rotate-to-fullscreen no longer fakes it: MyTube taps YouTube's own fullscreen button for you, so YouTube enters its real fullscreen and renders its real controls. `requestFullscreen()` refuses to run without a user gesture, which `evaluateJavascript` cannot manufacture, but a touch dispatched through the normal input pipeline is indistinguishable from a real one to the browser. The page is asked to grow its player only as a fallback for the moment before that tap lands.
+
+> The experimental **Use native video fullscreen** switch is gone. It selected a path that could not work — a fullscreen request with no gesture behind it — and it is now what the feature does unconditionally.
+
 ## What's New in v2.10.0
 
-- **Rotate to fullscreen landscape** — play a YouTube video, turn the phone, and the video goes edge-to-edge in landscape with the status bar, navigation bar and the YouTube masthead all hidden. Turn it back and you land in portrait again.
+- **Rotate to fullscreen landscape** — play a YouTube video, turn the phone, and the video goes edge-to-edge in landscape with the status bar, navigation bar and the YouTube masthead all hidden. YouTube's own controls, seek bar and double-tap 10-second seek all come with it. Turn it back and you land in portrait again.
 - **Three modes in Settings** — **Off**, **Rotate to landscape** (default), or **Always landscape** if you would rather it stay in fullscreen for the whole video, YouTube-app style.
-- **Native fullscreen (experimental)** — an opt-in switch that uses the browser's own fullscreen API. Android WebView gates that behind a real touch gesture and often refuses, so MyTube falls back to the built-in fullscreen automatically when it does.
 - **Reliable exit** — the corner **✕**, the back button, rotating to portrait, switching tabs, leaving the app and entering PiP all leave fullscreen cleanly. You can't get stranded in landscape.
 - **Fullscreen on the YouTube tab only** — Movies and Anime mirrors use unrelated players, so they keep their normal layout.
 
@@ -82,7 +96,7 @@
 
 Grab the latest signed APK from the **[Releases page](https://github.com/Isaac-1555/MyTube_Android/releases/latest)**.
 
-Direct download: **[MyTube-v2.10.0-release.apk](https://github.com/Isaac-1555/MyTube_Android/releases/download/v2.10.0/MyTube-v2.10.0-release.apk)**
+Direct download: **[MyTube-v2.10.1-release.apk](https://github.com/Isaac-1555/MyTube_Android/releases/download/v2.10.1/MyTube-v2.10.1-release.apk)**
 
 ### Install on Android
 
@@ -95,7 +109,7 @@ Direct download: **[MyTube-v2.10.0-release.apk](https://github.com/Isaac-1555/My
 ### Install with ADB
 
 ```bash
-adb install MyTube-v2.10.0-release.apk
+adb install MyTube-v2.10.1-release.apk
 ```
 
 ### Requirements
@@ -106,7 +120,7 @@ adb install MyTube-v2.10.0-release.apk
 ### Verify the download (optional)
 
 ```bash
-apksigner verify --print-certs MyTube-v2.10.0-release.apk
+apksigner verify --print-certs MyTube-v2.10.1-release.apk
 ```
 
 The release is signed with APK Signature Scheme v2. Certificate SHA-256:
@@ -149,7 +163,6 @@ The bottom bar is the only chrome the app draws — everything above it is the r
 | **Ad Blocking** | Enable hosts + scriptlet based ad blocking |
 | **Auto-hide Bottom Bar** | Hide the bottom controls after a few seconds of inactivity |
 | **Video Fullscreen** | `Off`, `Rotate to landscape` (default) or `Always landscape` |
-| **Use native video fullscreen** | Experimental: use the browser's own fullscreen API, with an automatic fallback |
 | **YouTube Button** | Show the YouTube link in the bottom bar |
 | **YouTube Music Button** | Show the YouTube Music link in the bottom bar |
 | **Movies Button** | Show the Movies link in the bottom bar |
@@ -196,6 +209,23 @@ Then build:
 `keystore.properties`, `*.jks` and `*.keystore` are git-ignored — never commit your signing keys.
 
 ## Changelog
+
+### v2.10.1 — 2026-10-18
+
+- Fix: `ytp-fullscreen`-gated chrome never appeared because the CSS pinned `#movie_player` above `#player-control-overlay`, the sibling that holds the mobile-web player's control bar, seek bar and fullscreen button
+- Fix: hide everything outside the player chain with `display:none` on the siblings rather than `visibility:hidden` over the page; YouTube fades its own control bar with `visibility`, and a blanket `visibility: visible !important` over the player subtree defeated that permanently
+- Fix: tapping to pause tore down fullscreen, because `VideoState.isWatchable` required `isPlaying` and a pause read as "nothing to watch"
+- Fix: double-tap to skip 10 seconds was unavailable with no fullscreen chrome to drive it
+- Feature: lock control inside fullscreen; YouTube's mobile-web player has no lock element in any state, so it is supplied by the app
+- Fix: input lock no longer forces an exit from fullscreen, which is what made the new lock control unusable
+- Fix: the app's own exit ✕ no longer stacks on top of YouTube's once YouTube is in its own fullscreen
+- Fix: make `isCssFullscreen` and `isNativeFullscreen` Compose-observable; they were plain `var`s, so anything reading them never recomposed
+- Fix: rate-limit the fullscreen DOM audit, which ran six `elementsFromPoint` probes plus computed-style reads on every play/pause/seek report
+- Browser: hand fullscreen to YouTube rather than imitating it — tap its own fullscreen button with a synthesised touch, which Blink treats as real input and therefore as the user activation `requestFullscreen()` demands
+- Browser: locate the button by its accessible label; the mobile-web player has no `.ytp-fullscreen-button` and every class-based selector matched nothing
+- Browser: retry the hand-off while YouTube rebuilds the player around the rotation
+- Cleanup: remove the `Use native video fullscreen` setting and the gesture-less fullscreen attempt chain behind it
+- Tests: 23 unit tests, covering the pause-must-not-exit and lock-must-not-exit regressions
 
 ### v2.10.0 — 2026-10-17
 
