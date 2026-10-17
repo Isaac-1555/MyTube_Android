@@ -263,7 +263,13 @@ class WebViewManager {
         return wv
     }
 
-    @OptIn(WebViewBuilder.Experimental::class)
+    // androidx.annotation.OptIn, not kotlin.OptIn: WebViewBuilder.Experimental is an
+    // androidx.annotation.RequiresOptIn marker, not a kotlin.RequiresOptIn one, so
+    // kotlinc treats the Kotlin @OptIn as a no-op - it warns about exactly that - and
+    // lint still reported the call site as an unsafe opt-in usage. This is the form
+    // lint asks for, and unlike marking this function @Experimental it does not
+    // propagate the opt-in out to every caller.
+    @androidx.annotation.OptIn(WebViewBuilder.Experimental::class)
     private fun createProfiledWebView(mode: BrowserMode, profileName: String, context: Context): WebView {
         val profile = ensureProfile(profileName, mode)
         val wv: WebView = if (profile != null &&
