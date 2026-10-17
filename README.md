@@ -59,6 +59,13 @@
 - **Auto-hide bottom bar** — the bar fades away after 5s of inactivity and returns on touch.
 - **Configurable sources** — if a Movies/Anime mirror rotates or goes down, paste a new home URL in Settings.
 
+## What's New in v2.10.2
+
+Housekeeping. No behaviour change.
+
+- **Android Lint passes again.** `./gradlew lint` had been failing since the rotate-to-fullscreen work on an `UnsafeOptInUsageError` in the per-tab profile WebView builder. The experimental marker on that API is an AndroidX opt-in rather than a Kotlin one, so the Kotlin `@OptIn` doing the job was a no-op to the compiler — it was warning about that on every build — and lint was still flagging the call site. The AndroidX form is used instead, which silences both without pushing the opt-in out to every caller.
+- **Cleaner repository.** Release APKs are now ignored instead of piling up untracked at the repo root, as is the whole `.idea` directory. Neither was ever meant to be committed.
+
 ## What's New in v2.10.1
 
 A fix release for rotate-to-fullscreen, which shipped in v2.10.0 without a working player UI.
@@ -96,7 +103,7 @@ Under the hood, rotate-to-fullscreen no longer fakes it: MyTube taps YouTube's o
 
 Grab the latest signed APK from the **[Releases page](https://github.com/Isaac-1555/MyTube_Android/releases/latest)**.
 
-Direct download: **[MyTube-v2.10.1-release.apk](https://github.com/Isaac-1555/MyTube_Android/releases/download/v2.10.1/MyTube-v2.10.1-release.apk)**
+Direct download: **[MyTube-v2.10.2-release.apk](https://github.com/Isaac-1555/MyTube_Android/releases/download/v2.10.2/MyTube-v2.10.2-release.apk)**
 
 ### Install on Android
 
@@ -109,7 +116,7 @@ Direct download: **[MyTube-v2.10.1-release.apk](https://github.com/Isaac-1555/My
 ### Install with ADB
 
 ```bash
-adb install MyTube-v2.10.1-release.apk
+adb install MyTube-v2.10.2-release.apk
 ```
 
 ### Requirements
@@ -120,7 +127,7 @@ adb install MyTube-v2.10.1-release.apk
 ### Verify the download (optional)
 
 ```bash
-apksigner verify --print-certs MyTube-v2.10.1-release.apk
+apksigner verify --print-certs MyTube-v2.10.2-release.apk
 ```
 
 The release is signed with APK Signature Scheme v2. Certificate SHA-256:
@@ -209,6 +216,12 @@ Then build:
 `keystore.properties`, `*.jks` and `*.keystore` are git-ignored — never commit your signing keys.
 
 ## Changelog
+
+### v2.10.2 — 2026-10-18
+
+- Build: fix `UnsafeOptInUsageError`; use `androidx.annotation.OptIn` for the WebView builder's AndroidX opt-in marker, which also clears the standing `kotlinc` warning that the Kotlin `@OptIn` there had no effect
+- Build: `./gradlew lint` green again; it had been failing since v2.10.0
+- Repo: ignore release APKs and `.idea/` so they stop accumulating untracked at the root
 
 ### v2.10.1 — 2026-10-18
 
