@@ -4,10 +4,20 @@
 
     var STYLE_ID = 'mytube-fs';
 
-    // One style element for both fullscreen modes. They used to be separate <style>
-    // blocks and both pinned .html5-video-player with !important, so whichever was
-    // injected last silently won.
-var CSS = [
+    // The page chrome is hidden by JS, by display:none on everything outside the
+        // player chain. See hideOutsidePlayer.
+        //
+        // It used to be `body * { visibility: hidden }` plus a re-show of the player
+        // subtree. That cannot work here: YouTube fades its own control bar by setting
+        // visibility:hidden on .player-controls-content/-top/-bottom, so any blanket
+        // `visibility: visible !important` over those elements beats it and the
+        // controls never fade again. display:none on the siblings leaves YouTube's
+        // visibility transitions alone.
+        //
+        // One style element for both fullscreen modes. They used to be separate <style>
+        // blocks and both pinned .html5-video-player with !important, so whichever was
+        // injected last silently won.
+        var CSS = [
         'html.mytube-fs-css, html.mytube-fs-css body { background:#000 !important; overflow:hidden !important; }',
 
         // position:fixed resolves against the nearest ancestor with a transform,
@@ -23,27 +33,31 @@ var CSS = [
         '  backdrop-filter: none !important; content-visibility: visible !important;',
         '}',
 
-        // Hide the page chrome by hiding everything that is not the player, instead of
-        // listing selectors for it. YouTube ships several different mastheads (desktop,
-        // logged-out, new "supernav", yt- prefixed) and a selector list only ever
-        // matches whichever one was current when it was written. Blanket hiding plus an
-        // explicit re-show of the player subtree is also what YouTube's own fullscreen
-        // does, and it keeps the player's controls working.
-        'html.mytube-fs-css body * { visibility: hidden !important; }',
-        'html.mytube-fs-css .html5-video-player,',
-        'html.mytube-fs-css .html5-video-player * { visibility: visible !important; }',
+        // The player chain has to span the viewport for the overlay below to land in
+        // the right place, and with the rest of the page display:none it no longer has
+        // any flow content giving it height.
+        'html.mytube-fs-css ytd-watch-flexy, html.mytube-fs-css ytd-player,',
+        'html.mytube-fs-css #player-container-outer, html.mytube-fs-css #player-container-inner,',
+        'html.mytube-fs-css #player-container {',
+        '  width: 100% !important; height: 100vh !important; min-height: 0 !important;',
+        '}',
 
         'html.mytube-fs-css .html5-video-player {',
         '  position: fixed !important; top: 0 !important; left: 0 !important; right: 0 !important;',
         '  bottom: 0 !important; width: 100vw !important; height: 100vh !important;',
         '  max-width: none !important; max-height: none !important;',
-        '  margin: 0 !important; z-index: 2147483647 !important; background: #000 !important;',
+        '  margin: 0 !important; background: #000 !important;',
+        // One below the control overlay below. #movie_player owns the video surface
+        // and a full-bleed .ytp-player-content inside it, so at an equal or higher
+        // z-index it paints over the controls and eats every tap meant for them.
+        '  z-index: 2147483646 !important;',
         '}',
 
-        // Nothing above targets the player's own chrome, so the seek bar, play button
-        // and quality menu stay interactive. Deliberately no `display: revert` rule
-        // here: at author origin `revert` resolves to the UA value (block), not
-        // YouTube's own flex layout, which would break the control bar.
+        // The mobile-web player draws its real control bar - seek bar, play button,
+        // fullscreen button - in #player-control-overlay, a sibling of #movie_player.
+        // z-index only: no visibility, so YouTube's own show/hide of the controls is
+        // left alone.
+        'html.mytube-fs-css #player-control-overlay { z-index: 2147483647 !important; }',
 
         'html.mytube-fs-pip, html.mytube-fs-pip body { background:#000 !important; overflow:hidden !important; }',
         'html.mytube-fs-pip .html5-video-player {',
@@ -75,43 +89,322 @@ var CSS = [
         }
     }
 
-    // ---- native (Fullscreen API) attempt chain --------------------------------
-    // Chromium gates every entry below on transient user activation, so each one
-    // can fail. The Kotlin side watches for onShowCustomView and falls back to the
-    // CSS path on a timer; this just tries in order of likelihood.
-    window.MyTubeTryNativeFullscreen = function() {
-        var v = document.querySelector('video');
-        var tries = [];
 
-        if (v && typeof v.webkitEnterFullscreen === 'function') tries.push('video.webkitEnterFullscreen');
-        tries.push('documentElement.requestFullscreen');
+    // Located by label rather than by class: the desktop player's
+    // .ytp-fullscreen-button does not exist on the mobile-web player, which ships
+    // an unprefixed "icon-button fullscreen-icon" instead. Any attempt to name it
+    // by class has matched nothing.
+    function findFsButtons() {
+        return [].slice.call(document.querySelectorAll(
+            '[aria-label*="full screen" i],[aria-label*="fullscreen" i],' +
+            '[title*="full screen" i],[title*="fullscreen" i]'
+        ));
+    }
 
-        if (v && typeof v.webkitEnterFullscreen === 'function') {
-            try { v.webkitEnterFullscreen(); return reportTier('video.webkitEnterFullscreen'); } catch (e) {}
-        }
-        var root = document.documentElement;
-        if (root && typeof root.requestFullscreen === 'function') {
+    /**
+     * Turns the next trusted touch into YouTube entering its own fullscreen.
+     *
+     * A tap dispatched from the app reaches Blink's input pipeline intact - the
+     * renderer reports isTrusted:true - so it grants the transient user activation
+     * that requestFullscreen() demands and which no evaluateJavascript call can
+     * produce. Activation is a frame-level state that outlives the event that set
+     * it, so dispatching the click from inside the touch handler still clears the
+     * gate.
+     *
+     * The click is dispatched straight at the button rather than left to hit
+     * testing, because #movie_player is pinned over #player-control-overlay and
+     * would otherwise swallow it. One-shot, and it suppresses the native click so
+     * the button is not activated twice.
+     */
+    window.MyTubeFsArmPromote = function() {
+        if (document.fullscreenElement) return 'already-fullscreen';
+        var fired = false;
+        function onTrusted(e) {
+            if (fired) return;
+            fired = true;
+            window.removeEventListener('touchend', onTrusted, true);
+            window.removeEventListener('click', onTrusted, true);
+            // The button's own listener would otherwise run after ours and enter
+            // fullscreen a second time.
+            e.stopPropagation();
+            e.preventDefault();
+            if (document.fullscreenElement) return;
+            var btns = findFsButtons();
+            var btn = null;
+            for (var i = 0; i < btns.length && !btn; i++) {
+                var r = btns[i].getBoundingClientRect();
+                if (r.width > 8 && r.height > 8) btn = btns[i];
+            }
             try {
-                var p = root.requestFullscreen();
-                if (p && p.catch) p.catch(function() {});
-                return reportTier('documentElement.requestFullscreen');
-            } catch (e) {}
+                if (btn) {
+                    btn.click();
+                } else {
+                    document.documentElement.requestFullscreen();
+                }
+            } catch (err) {
+                try { document.documentElement.requestFullscreen(); } catch (e2) {}
+            }
         }
-        var btn = document.querySelector('.fullscreen-icon.ytp-large-mode-button') ||
-                  document.querySelector('.ytp-fullscreen-button');
-        if (btn) {
-            try { btn.click(); return reportTier('player-button-click'); } catch (e) {}
-        }
-        return reportTier('none');
+        window.addEventListener('touchend', onTrusted, true);
+        window.addEventListener('click', onTrusted, true);
+        return 'armed';
     };
 
-    function reportTier(tier) {
-        try {
-            if (window.Android && window.Android.onNativeFullscreenAttempt) {
-                window.Android.onNativeFullscreenAttempt(tier);
+    /**
+     * Reports where YouTube's own fullscreen button is, in CSS pixels relative to the
+     * viewport, so the Kotlin side can tap it. Returns an object literal because
+     * evaluateJavascript hands the JSON text straight back.
+     *
+     * This is the whole auto-promote mechanism: requestFullscreen() refuses to run
+     * without transient user activation, and only a touch through the real input
+     * pipeline grants that. Reading the button's rect is what lets the app perform
+     * that touch itself, which makes YouTube run its genuine fullscreen path and
+     * therefore its genuine controls, seek bar and double-tap seeking. Nothing we
+     * can inject produces those.
+     */
+    window.MyTubeFsButtonRect = function() {
+        // YouTube autohides the controls, and a hidden control is not hit-testable,
+        // so a tap at those coordinates falls through to the page and toggles playback
+        // instead. YouTube restores the hidden state on the next interaction, which is
+        // well before anyone could notice.
+        var host = document.querySelector('#movie_player') ||
+                   document.querySelector('.html5-video-player');
+        if (host) {
+            if (host.classList.contains('ytp-autohide')) window.MyTubeFsUnhidAutohide = true;
+            host.classList.remove('ytp-autohide');
+        }
+
+        // Located by label rather than by class: the desktop player's
+        // .ytp-fullscreen-button does not exist on the mobile-web player, which ships
+        // an unprefixed "icon-button fullscreen-icon" instead.
+        var nodes = findFsButtons();
+        var out = [];
+        var pick = null;
+        for (var i = 0; i < nodes.length; i++) {
+            var el = nodes[i];
+            var r = el.getBoundingClientRect();
+            if (r.width < 8 || r.height < 8) continue;
+            var rec = {
+                cls: typeof el.className === 'string' ? el.className : '',
+                label: el.getAttribute('aria-label') || el.getAttribute('title') || '',
+                x: r.left + r.width / 2,
+                y: r.top + r.height / 2,
+                w: Math.round(r.width),
+                h: Math.round(r.height),
+                blocked: blocker(el)
+            };
+            out.push(rec);
+            if (!pick) pick = el;
+        }
+        if (!out.length) {
+            return { found: false, reason: 'no fullscreen-labelled element', dump: dumpPlayer() };
+        }
+
+        // The one candidate is laid out but visibility:hidden while playing. Force
+        // the chain visible, then re-measure, because the tap has to land on the
+        // button rather than falling through to the video underneath it.
+        forceHitTestable(pick);
+        var pr = pick.getBoundingClientRect();
+        var pc = getComputedStyle(pick);
+        var cx = pr.left + pr.width / 2;
+        var cy = pr.top + pr.height / 2;
+        return {
+            found: pr.width > 1 && pr.height > 1 && !blocker(pick),
+            x: cx,
+            y: cy,
+            w: Math.round(pr.width),
+            h: Math.round(pr.height),
+            cls: typeof pick.className === 'string' ? pick.className : '',
+            label: pick.getAttribute('aria-label') || pick.getAttribute('title') || '',
+            vis: pc.visibility, disp: pc.display, pe: pc.pointerEvents,
+            blocked: blocker(pick),
+            // Not getScale(): with useWideViewPort the layout viewport is chosen so
+            // that CSS px map to view px by devicePixelRatio, which is 2.625 on a
+            // 1080p panel. getScale() reports page zoom and reads 1.0.
+            dpr: window.devicePixelRatio,
+            vw: window.innerWidth,
+            vh: window.innerHeight,
+            // What actually paints over the button, topmost first. Whether the button
+            // appears here at all decides if a tap can reach it.
+            stack: hitStack(cx, cy, pick),
+            dump: dumpPlayer()
+        };
+    };
+
+    function hitStack(x, y, target) {
+        var stack = document.elementsFromPoint(Math.round(x), Math.round(y)) || [];
+        var out = [];
+        for (var i = 0; i < stack.length && i < 4; i++) {
+            var e = stack[i];
+            out.push(
+                (e.id ? '#' + e.id : e.tagName.toLowerCase()) +
+                '.' + (typeof e.className === 'string' ? e.className.split(/\s+/).join('.') : '') +
+                (e === target ? ' <-TARGET' : '')
+            );
+        }
+        return out.join(' | ');
+    }
+
+    /**
+     * Makes [el] reachable by a real touch, remembering what it changed so
+     * [restoreHitTestable] can put YouTube's own state back.
+     */
+    function forceHitTestable(el) {
+        restoreHitTestable();
+        window.MyTubeFsForced = [];
+        var p = el;
+        while (p && p !== document.documentElement) {
+            var s = getComputedStyle(p);
+            if (s.visibility === 'hidden') {
+                window.MyTubeFsForced.push([p, 'visibility', p.style.getPropertyValue('visibility'), p.style.getPropertyPriority('visibility')]);
+                p.style.setProperty('visibility', 'visible', 'important');
             }
-        } catch (e) {}
-        return tier;
+            if (s.pointerEvents === 'none') {
+                window.MyTubeFsForced.push([p, 'pointer-events', p.style.getPropertyValue('pointer-events'), p.style.getPropertyPriority('pointer-events')]);
+                p.style.setProperty('pointer-events', 'auto', 'important');
+            }
+            p = p.parentElement;
+        }
+    }
+
+    /**
+     * What the player's control surface actually looks like right now. Written
+     * because the mobile-web chrome is reached through four different class name
+     * schemes depending on the build, and every attempt to guess at them has been
+     * wrong.
+     */
+    window.MyTubeFsDumpChrome = function() {
+        var out = [];
+        function row(sel) {
+            var e = document.querySelector(sel);
+            if (!e) { out.push(sel + '=MISSING'); return; }
+            var cs = getComputedStyle(e);
+            var r = e.getBoundingClientRect();
+            out.push(sel + '={cls:' + (typeof e.className === 'string' ? e.className : '') +
+                ',disp:' + cs.display + ',op:' + cs.opacity + ',vis:' + cs.visibility +
+                ',pe:' + cs.pointerEvents + ',z:' + cs.zIndex +
+                ',rect:' + Math.round(r.left) + ',' + Math.round(r.top) + ',' +
+                Math.round(r.width) + 'x' + Math.round(r.height) + '}');
+        }
+        ['#movie_player', '#player-control-overlay', '.player-controls-content',
+         '.player-controls-top', '.player-controls-bottom', '.player-controls-bottom-left',
+         '.player-controls-bottom-right', '.ytp-large-mode-buttons',
+         '.ytp-chrome-bottom', '.ytp-chrome-top', '.ytp-progress-bar'
+        ].forEach(row);
+        // Whatever YouTube happens to be calling its seek bar and lock button this week.
+        var probe = ['seek', 'scrub', 'progress', 'lock', 'timeline'];
+        var found = {};
+        var all = document.querySelectorAll('#player-control-overlay *, #movie_player *');
+        for (var i = 0; i < all.length && i < 4000; i++) {
+            var cn = typeof all[i].className === 'string' ? all[i].className : '';
+            probe.forEach(function(k) {
+                if (cn.toLowerCase().indexOf(k) !== -1 && !found[k + ':' + cn]) {
+                    found[k + ':' + cn] = 1;
+                    var cs2 = getComputedStyle(all[i]);
+                    var r2 = all[i].getBoundingClientRect();
+                    out.push('?' + k + ' {' + cn + '} disp:' + cs2.display + ' op:' +
+                        cs2.opacity + ' vis:' + cs2.visibility + ' pe:' + cs2.pointerEvents +
+                        ' rect:' + Math.round(r2.left) + ',' + Math.round(r2.top) + ',' +
+                        Math.round(r2.width) + 'x' + Math.round(r2.height) + '}');
+                }
+            });
+        }
+        return out.join('\n');
+    };
+
+    window.MyTubeFsRestoreChrome = function() {
+        restoreHitTestable();
+        var host = document.querySelector('#movie_player') ||
+                   document.querySelector('.html5-video-player');
+        // Only re-hide if we were the ones who un-hid it. YouTube may have engaged
+        // its own fullscreen chrome in the meantime, which must stay visible.
+        if (host && window.MyTubeFsUnhidAutohide) host.classList.add('ytp-autohide');
+        window.MyTubeFsUnhidAutohide = false;
+    };
+
+    /**
+     * Records what the page receives from a touch, so a tap that silently fails can
+     * be told apart from one the page ignored. isTrusted is the one that matters:
+     * it is what decides whether Chromium treats the tap as user activation.
+     *
+     * Diagnostic only, installed on demand, never on the tap path itself - logging
+     * every touch of a YouTube session is noise and not free.
+     */
+    window.MyTubeFsTapProbe = function() {
+        if (window.MyTubeFsProbed) return true;
+        window.MyTubeFsProbed = true;
+        ['touchstart', 'touchend', 'click', 'pointerdown'].forEach(function(t) {
+            window.addEventListener(t, function(e) {
+                var el = e.target;
+                var rec = {
+                    type: t, trusted: e.isTrusted,
+                    x: Math.round(e.clientX || 0), y: Math.round(e.clientY || 0),
+                    target: el ? ((el.id ? '#' + el.id : '') +
+                        (typeof el.className === 'string' && el.className
+                            ? '.' + el.className.split(/\s+/).slice(0, 2).join('.') : '')) : 'null'
+                };
+                try {
+                    if (window.Android && window.Android.onFullscreenCssAudit) {
+                        window.Android.onFullscreenCssAudit('PROBE ' + JSON.stringify(rec));
+                    }
+                } catch (err) {}
+            }, true);
+        });
+        return true;
+    };
+
+    function restoreHitTestable() {
+        var l = window.MyTubeFsForced || [];
+        for (var i = 0; i < l.length; i++) {
+            var e = l[i];
+            if (e[3]) e[0].style.setProperty(e[1], e[2], e[3]);
+            else e[0].style[e[1]] = e[2];
+        }
+        window.MyTubeFsForced = [];
+    }
+
+    /** First ancestor that would stop the tap reaching [el]. */
+    function blocker(el) {
+        var p = el;
+        while (p && p !== document.documentElement) {
+            var s = getComputedStyle(p);
+            if (s.visibility === 'hidden' || s.display === 'none' || s.pointerEvents === 'none') {
+                var id = p.id ? '#' + p.id
+                    : (typeof p.className === 'string' && p.className
+                        ? '.' + p.className.split(/\s+/)[0]
+                        : p.tagName.toLowerCase());
+                return id + ' ' + s.visibility + '/' + s.display + '/' + s.pointerEvents;
+            }
+            p = p.parentElement;
+        }
+        return '';
+    }
+
+    /**
+     * What the player actually contains. Diagnostic only, but guessing at YouTube's
+     * control markup is how the previous selector list ended up matching nothing.
+     */
+    function dumpPlayer() {
+        var host = document.querySelector('#movie_player') ||
+                   document.querySelector('.html5-video-player');
+        if (!host) return 'no #movie_player';
+        var seen = {};
+        var all = host.querySelectorAll('*');
+        for (var i = 0; i < all.length && i < 3000; i++) {
+            var cn = typeof all[i].className === 'string' ? all[i].className : '';
+            cn.split(/\s+/).forEach(function(c) { if (c.indexOf('ytp-') === 0) seen[c] = 1; });
+        }
+        var bars = ['.ytp-chrome-bottom', '.ytp-chrome-top', '.ytp-left-controls',
+                    '.ytp-right-controls', '.ytp-buttons'];
+        var barDump = bars.map(function(sel) {
+            var el = host.querySelector(sel);
+            if (!el) return sel + ':-';
+            var kids = [].map.call(el.children, function(c) {
+                return (typeof c.className === 'string' ? c.className : c.tagName).split(/\s+/)[0];
+            });
+            return sel + ':' + kids.join(',');
+        }).join(' ');
+        return Object.keys(seen).join(' ') + ' || ' + barDump;
     }
 
     window.MyTubeExitNativeFullscreen = function() {
@@ -171,9 +464,20 @@ var CSS = [
         return out.length ? out.join(' ') : 'clean';
     };
 
-    function verify(tag) {
+    /** Shortest gap between two audits. See [verify] for why there is one. */
+    var VERIFY_MIN_INTERVAL_MS = 2000;
+
+    function verify(tag, force) {
         if (!window.MyTubeFsCssOn) return;
         if (!window.Android || !window.Android.onFullscreenCssApplied) return;
+        // The audit probes six points with elementsFromPoint and reads computed styles
+        // off everything stacked there. Doing that on every play/pause/seek report -
+        // which is every few seconds while watching - is real work for a diagnostic,
+        // so it is rate limited. The entry-time re-checks pass force because catching
+        // a late relayout is the one thing the audit exists for.
+        var now = Date.now();
+        if (!force && now - (window.MyTubeFsLastVerify || 0) < VERIFY_MIN_INTERVAL_MS) return;
+        window.MyTubeFsLastVerify = now;
         try {
             window.Android.onFullscreenCssApplied(window.MyTubeFsApplied());
             window.Android.onFullscreenCssAudit(window.MyTubeFsChromeAudit());
@@ -196,11 +500,12 @@ var CSS = [
         toggleClass('mytube-fs-css', on);
         if (on) {
             reassert();
-            verify('immediate');
+            verify('immediate', true);
             // YouTube re-lays-out for a while after a rotation, so verify late too.
-            setTimeout(function() { if (window.MyTubeFsCssOn) { reassert(); verify('300ms'); } }, 300);
-            setTimeout(function() { if (window.MyTubeFsCssOn) { reassert(); verify('900ms'); } }, 900);
+            setTimeout(function() { if (window.MyTubeFsCssOn) { reassert(); verify('300ms', true); } }, 300);
+            setTimeout(function() { if (window.MyTubeFsCssOn) { reassert(); verify('900ms', true); } }, 900);
         } else {
+            restoreHiddenOutside();
             verify('off');
         }
     };
@@ -222,6 +527,73 @@ var CSS = [
             styleEl();
             root.classList.add('mytube-fs-css');
         }
+        hideOutsidePlayer();
+    }
+
+    /**
+     * Hides everything that is not the player, by display:none on the siblings of the
+     * player chain.
+     *
+     * Hiding by position in the tree rather than by a list of selectors is what makes
+     * this survive YouTube redesigns: it does not care what the masthead is called, or
+     * how many of them there are. display:none rather than visibility:hidden because
+     * YouTube fades its own control bar with visibility, and a blanket
+     * `visibility: visible !important` over the player subtree defeats that outright -
+     * which is exactly how the controls ended up never fading.
+     */
+    function hideOutsidePlayer() {
+        restoreHiddenOutside();
+        var roots = [];
+        ['#player-control-overlay', '#movie_player'].forEach(function(sel) {
+            var e = document.querySelector(sel);
+            if (e) roots.push(e);
+        });
+        if (!roots.length || !document.body) return;
+
+        var node = lowestCommonAncestor(roots);
+        while (node && node !== document.body && node.parentElement) {
+            var kids = node.children;
+            for (var i = 0; i < kids.length; i++) {
+                var child = kids[i];
+                if (isOnChain(child, roots)) continue;
+                window.MyTubeFsHidden.push([
+                    child,
+                    child.style.getPropertyValue('display'),
+                    child.style.getPropertyPriority('display')
+                ]);
+                child.style.setProperty('display', 'none', 'important');
+            }
+            node = node.parentElement;
+        }
+    }
+
+    function isOnChain(el, roots) {
+        for (var i = 0; i < roots.length; i++) {
+            if (el === roots[i] || el.contains(roots[i])) return true;
+        }
+        return false;
+    }
+
+    function lowestCommonAncestor(nodes) {
+        var lca = nodes[0];
+        for (var i = 1; i < nodes.length; i++) {
+            var a = lca, b = nodes[i];
+            while (a && a !== b) {
+                if (!a.contains(b)) a = a.parentElement;
+                else b = b.parentElement;
+            }
+            if (a) lca = a;
+        }
+        return lca;
+    }
+
+    function restoreHiddenOutside() {
+        var list = window.MyTubeFsHidden || [];
+        for (var i = 0; i < list.length; i++) {
+            if (list[i][2]) list[i][0].style.setProperty('display', list[i][1], list[i][2]);
+            else list[i][0].style.display = list[i][1];
+        }
+        window.MyTubeFsHidden = [];
     }
 
     // YouTube re-renders the player constantly (quality changes, ad hand-off,
@@ -255,11 +627,15 @@ var CSS = [
         // counting that as "not playing" dropped fullscreen at exactly the wrong
         // moment. A video that has not started is already paused.
         var playing = has && !v.paused && !v.ended;
+        // playing is deliberately kept out of the payload and only used to key the
+        // dedupe. It must not reach Kotlin: a pause that reports as "no longer
+        // watchable" makes the resolver tear down fullscreen, which is exactly what
+        // happened when tapping to pause while watching.
         var key = has + '|' + watch + '|' + playing + '|' + location.pathname;
         if (!force && key === lastKey) return;
         lastKey = key;
         try {
-            window.Android.onVideoStateChanged(has, watch, playing);
+            window.Android.onVideoStateChanged(has, watch);
         } catch (e) {}
         if (window.MyTubeFsCssOn) verify('report');
     }

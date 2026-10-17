@@ -18,9 +18,6 @@ import androidx.core.view.WindowInsetsControllerCompat
 
 private const val TAG = "MyTubeFullscreen"
 
-/** How long to wait for real Fullscreen API entry before falling back to CSS. */
-private const val NATIVE_ATTEMPT_TIMEOUT_MS = 600L
-
 /** Re-hide the bars after the orientation relayout has had time to revert them. */
 private const val SETTLE_DELAY_MS = 150L
 
@@ -29,6 +26,19 @@ private const val PEEK_GRACE_MS = 1_200L
 
 /** How often the guard checks whether a system bar has come back. */
 private const val GUARD_INTERVAL_MS = 250L
+
+/** How long after entry to make the first auto-promote attempt. */
+private const val AUTO_PROMOTE_DELAY_MS = 500L
+
+/**
+ * How often to retry, and for how long. YouTube rebuilds its player around a rotation
+ * and the control overlay holding the fullscreen button does not always exist by the
+ * time we look for it, so a single attempt timed out roughly one time in three on
+ * device. One attempt is not enough; a fixed delay long enough to always work would
+ * mean a visible stall on every entry.
+ */
+private const val AUTO_PROMOTE_RETRY_MS = 400L
+private const val AUTO_PROMOTE_DEADLINE_MS = 2_500L
 
 /**
  * Owns the native half of video fullscreen: orientation, system bars, cutout.
@@ -47,8 +57,7 @@ private const val GUARD_INTERVAL_MS = 250L
  */
 class VideoFullscreenController(
     private val activity: Activity,
-    private val webViewManager: WebViewManager,
-    private val nativeFullscreenEnabled: () -> Boolean
+    private val webViewManager: WebViewManager
 ) {
     private val mainHandler = Handler(Looper.getMainLooper())
 
@@ -56,14 +65,21 @@ class VideoFullscreenController(
     var isFullscreenActive by mutableStateOf(false)
         private set
 
-    var isCssFullscreen = false
+    /**
+     * Whether the chrome-hiding stylesheet is applied. True for the whole of native
+     * fullscreen too, because YouTube's masthead reappears if it is dropped, so this
+     * is not a proxy for "our own UI is on screen".
+     */
+    var isCssFullscreen by mutableStateOf(false)
         private set
 
-    var isNativeFullscreen = false
+    var isNativeFullscreen by mutableStateOf(false)
         private set
 
-    private var pendingNativeAttempt = false
     private var lastWasLandscape = false
+
+    /** One auto-promote attempt per entry, so a recomposition cannot re-tap. */
+    private var autoPromoteDone = false
 
     /**
      * Set when the user leaves fullscreen by hand while still in landscape. Cleared on
@@ -107,11 +123,7 @@ class VideoFullscreenController(
             return
         }
 
-        if (nativeFullscreenEnabled()) {
-            startNativeAttempt()
-        } else {
-            applyCss()
-        }
+        applyCss()
     }
 
     private fun applyCss() {
@@ -119,26 +131,52 @@ class VideoFullscreenController(
         isFullscreenActive = true
         webViewManager.setFullscreenCss(fsMode, true)
         Log.d(TAG, "enter: css fullscreen")
+        attemptAutoPromote()
     }
 
     /**
-     * Try real Fullscreen API entry, but never block on it. If no onShowCustomView
-     * arrives we quietly drop to the CSS layer so the user always gets something.
+     * Taps YouTube's own fullscreen button so YouTube runs its own fullscreen path.
+     *
+     * The CSS layer is only a layout pin. On its own it leaves the player wearing its
+     * inline chrome, which on the mobile-web player means no control bar and no seek
+     * bar at all: those live in #player-control-overlay, a sibling of #movie_player
+     * that the pin deliberately covers.
+     *
+     * So the pin is only the instant before, and the real event is the tap. It has to
+     * be a real touch: requestFullscreen() demands transient user activation, which
+     * evaluateJavascript cannot manufacture and which no synthetic DOM event grants,
+     * because Blink only counts input arriving over the real input pipeline. Once the
+     * tap lands, YouTube takes over and renders everything it normally would.
      */
-    private fun startNativeAttempt() {
-        pendingNativeAttempt = true
-        webViewManager.tryNativeFullscreen(fsMode)
-        mainHandler.postDelayed({
-            if (pendingNativeAttempt && !isNativeFullscreen) {
-                pendingNativeAttempt = false
-                Log.w(TAG, "native fullscreen did not engage in ${NATIVE_ATTEMPT_TIMEOUT_MS}ms; using css")
-                applyCss()
-            }
-        }, NATIVE_ATTEMPT_TIMEOUT_MS)
+    private fun attemptAutoPromote() {
+        if (autoPromoteDone) return
+        autoPromoteDone = true
+        mainHandler.postDelayed({ promoteUntil(SystemClock.uptimeMillis() + AUTO_PROMOTE_DEADLINE_MS) }, AUTO_PROMOTE_DELAY_MS)
+    }
+
+    /**
+     * Retried until the deadline rather than fired once. YouTube rebuilds the player
+     * around a rotation and the control overlay holding the fullscreen button is not
+     * always there yet when we first look, which cost roughly one attempt in three on
+     * device. [onAttempted] reports whether a tap was actually dispatched, because the
+     * button lookup is asynchronous and only it knows the answer.
+     */
+    private fun promoteUntil(deadline: Long) {
+        if (!isFullscreenActive || isNativeFullscreen) return
+        if (SystemClock.uptimeMillis() >= deadline) {
+            Log.w(TAG, "auto-promote: gave up after ${AUTO_PROMOTE_DEADLINE_MS}ms; staying on css")
+            logBars("promote-timeout")
+            return
+        }
+        webViewManager.tapFullscreenButton(fsMode) { tapped ->
+            if (tapped) return@tapFullscreenButton
+            if (!isFullscreenActive || isNativeFullscreen) return@tapFullscreenButton
+            mainHandler.postDelayed({ promoteUntil(deadline) }, AUTO_PROMOTE_RETRY_MS)
+        }
     }
 
     private fun exitAll() {
-        pendingNativeAttempt = false
+        autoPromoteDone = false
 
         // hideCustomView() re-enters through onNativeFullscreenHidden(). Mark the
         // teardown so a dismissal latch is only recorded for exits the user actually
@@ -334,8 +372,8 @@ class VideoFullscreenController(
     // ---- callbacks from WebViewManager ---------------------------------------
 
     fun onNativeFullscreenShown() {
-        pendingNativeAttempt = false
         isNativeFullscreen = true
+        Log.d(TAG, "enter: native fullscreen (after auto-promote=$autoPromoteDone)")
         // Keep the chrome-hiding CSS on. Native fullscreen here is usually
         // documentElement.requestFullscreen(), which renders the whole page, so
         // without the stylesheet YouTube's masthead stays on screen.
@@ -343,11 +381,15 @@ class VideoFullscreenController(
         isFullscreenActive = true
         webViewManager.setFullscreenCss(fsMode, true)
         pinWindowForVideo()
-        Log.d(TAG, "enter: native fullscreen")
+        val fv = webViewManager.fullscreenView
+        Log.d(
+            TAG,
+            "enter: native fullscreen view=${fv?.javaClass?.simpleName} " +
+                "size=${fv?.width}x${fv?.height} visible=${fv?.isShown}"
+        )
     }
 
     fun onNativeFullscreenHidden() {
-        pendingNativeAttempt = false
         isNativeFullscreen = false
         if (isFullscreenActive) {
             isFullscreenActive = false

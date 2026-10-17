@@ -28,10 +28,15 @@ enum class FullscreenDecision { Stay, Exit, Enter }
  */
 data class VideoState(
     val hasVideo: Boolean = false,
-    val isWatchPage: Boolean = false,
-    val isPlaying: Boolean = false
+    val isWatchPage: Boolean = false
 ) {
-    val isWatchable: Boolean get() = hasVideo && isWatchPage && isPlaying
+    /**
+     * Deliberately not "is playing". Tapping the video to pause is a thing people do
+     * while watching, and gating on playback state made the pause tear down
+     * fullscreen: the pause event flipped this false, the resolver read it as "nothing
+     * to watch", and the app dropped out of fullscreen under the user's finger.
+     */
+    val isWatchable: Boolean get() = hasVideo && isWatchPage
 }
 
 /**
@@ -66,10 +71,12 @@ object FullscreenResolver {
         // containers the CSS pin cannot safely target.
         if (i.mode != BrowserMode.YOUTUBE) return FullscreenDecision.Exit
 
-        // Never fight the system for the window, and never engage while input is locked.
-        if (i.isPip || i.isLocked) return FullscreenDecision.Exit
+        // Never fight the system for the window. Input lock used to force an exit too, but
+        // the lock is now offered inside fullscreen, so it must not end fullscreen.
+        if (i.isPip) return FullscreenDecision.Exit
 
-        // Home feed, shorts shelf, paused video, ended video, ad: nothing to do.
+        // Home feed, shorts shelf, ended video, ad: nothing to do. Note that a paused
+        // video still counts, see VideoState.isWatchable.
         if (!i.video.isWatchable) return FullscreenDecision.Exit
 
         // Already in real custom-view fullscreen and rotated to landscape: leave it

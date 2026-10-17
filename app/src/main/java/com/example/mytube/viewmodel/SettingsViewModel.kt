@@ -25,8 +25,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
     val rotateFullscreenMode: StateFlow<RotateFullscreenMode> = container.prefsManager.rotateFullscreenMode
         .stateIn(viewModelScope, SharingStarted.Eagerly, RotateFullscreenMode.DEFAULT)
-    val nativeVideoFullscreen: StateFlow<Boolean> = container.prefsManager.nativeVideoFullscreen
-        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
     val showYoutubeLink: StateFlow<Boolean> = container.prefsManager.showYoutubeLink
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
     val showMusicLink: StateFlow<Boolean> = container.prefsManager.showMusicLink
@@ -65,10 +63,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun setRotateFullscreenMode(mode: RotateFullscreenMode) {
         viewModelScope.launch { container.prefsManager.setRotateFullscreenMode(mode) }
-    }
-
-    fun setNativeVideoFullscreen(enabled: Boolean) {
-        viewModelScope.launch { container.prefsManager.setNativeVideoFullscreen(enabled) }
     }
 
     fun setShowYoutubeLink(enabled: Boolean) {

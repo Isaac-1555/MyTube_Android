@@ -6,7 +6,10 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.Message
+import android.os.SystemClock
 import android.util.Log
+import android.view.InputDevice
+import android.view.MotionEvent
 import android.view.ViewGroup
 import android.view.View
 import android.webkit.CookieManager
@@ -193,8 +196,8 @@ class WebViewManager {
         }
 
         @JavascriptInterface
-        fun onVideoStateChanged(hasVideo: Boolean, isWatchPage: Boolean, playing: Boolean) {
-            val next = VideoState(hasVideo, isWatchPage, playing)
+        fun onVideoStateChanged(hasVideo: Boolean, isWatchPage: Boolean) {
+            val next = VideoState(hasVideo, isWatchPage)
             if (next != _videoState.value) _videoState.value = next
         }
 
@@ -206,11 +209,6 @@ class WebViewManager {
         @JavascriptInterface
         fun onFullscreenCssAudit(audit: String) {
             Log.d(TAG, "chrome: $audit")
-        }
-
-        @JavascriptInterface
-        fun onNativeFullscreenAttempt(tier: String) {
-            Log.d(TAG, "native fullscreen attempt tier=$tier")
         }
     }
 
@@ -463,6 +461,13 @@ class WebViewManager {
 
     companion object {
         private const val TAG = "WebViewManager"
+
+        /**
+         * How long the synthesised touch stays down. Long enough that Chromium treats
+         * it as a tap, short enough that YouTube does not see a long press.
+         */
+        private const val TAP_HOLD_MS = 60L
+
         private val YOUTUBE_API_PATHS = listOf(
             "/youtubei/v1/player",
             "/youtubei/v1/browse",
@@ -675,8 +680,104 @@ class WebViewManager {
         )
     }
 
-    fun tryNativeFullscreen(mode: BrowserMode) {
-        evaluateJsIn(mode, "window.MyTubeTryNativeFullscreen&&window.MyTubeTryNativeFullscreen()")
+    /**
+     * Taps YouTube's own fullscreen button with a real touch, without anyone touching
+     * the screen.
+     *
+     * `requestFullscreen()` refuses to run without transient user activation.
+     * `evaluateJavascript` cannot manufacture that and neither can a synthetic DOM
+     * event, because Blink only grants activation for input that arrives over the real
+     * browser-to-renderer pipeline. A `MotionEvent` handed to [android.view.View
+     * .dispatchTouchEvent] enters exactly that pipeline, so this is the one route to
+     * making YouTube run its own fullscreen path from a rotation - and YouTube's own
+     * path is what brings its control bar, seek bar, lock button and double-tap
+     * seeking along. No CSS imitation of any of that comes close.
+     *
+     * Coordinates come from `MyTubeFsButtonRect` in CSS px and are scaled into the
+     * WebView's own coordinate space, which is what `dispatchTouchEvent` wants.
+     *
+     * [onAttempted] is told whether a tap was dispatched. The button lookup is a
+     * round trip into the page, so a caller that needs to retry cannot know the
+     * answer until it arrives.
+     */
+    fun tapFullscreenButton(mode: BrowserMode, onAttempted: (Boolean) -> Unit) {
+        val wv = webViewFor(mode) ?: run {
+            Log.w(TAG, "tap fs: no webview for $mode")
+            onAttempted(false)
+            return
+        }
+        wv.evaluateJavascript("window.MyTubeFsButtonRect && window.MyTubeFsButtonRect()") { raw ->
+            val body = raw?.trim().orEmpty()
+            if (body.isEmpty() || body == "null") {
+                Log.w(TAG, "tap fs: rect script returned nothing")
+                onAttempted(false)
+                return@evaluateJavascript
+            }
+            val rect = runCatching { JSONObject(body) }.getOrNull()
+            if (rect == null) {
+                Log.w(TAG, "tap fs: unparseable rect $body")
+                onAttempted(false)
+                return@evaluateJavascript
+            }
+            if (!rect.optBoolean("found", false)) {
+                // Normal during the first moments after a rotation: YouTube rebuilds
+                // the player and the control overlay holding the button is not back yet.
+                Log.w(TAG, "tap fs: button not ready; will retry")
+                restoreFullscreenChrome(mode)
+                onAttempted(false)
+                return@evaluateJavascript
+            }
+            // devicePixelRatio, not getScale(): with useWideViewPort the layout
+            // viewport is sized so that CSS px reach view px via the ratio, and
+            // getScale() only reports page zoom, which is 1.0 here. Using it put
+            // the tap at a quarter of the intended position.
+            val dpr = rect.optDouble("dpr", 1.0).takeIf { it > 0.0 } ?: 1.0
+            val x = (rect.optDouble("x") * dpr).toFloat()
+            val y = (rect.optDouble("y") * dpr).toFloat()
+            Log.d(
+                TAG,
+                "tap fs: target cls=${rect.optString("cls")} label=${rect.optString("label")} " +
+                    "view=(${x.toInt()},${y.toInt()}) dpr=$dpr viewSize=${wv.width}x${wv.height} " +
+                    "vw=${rect.optInt("vw")} vh=${rect.optInt("vh")}"
+            )
+            Log.d(TAG, "tap fs: stack ${rect.optString("stack")}")
+            val down = SystemClock.uptimeMillis()
+            wv.evaluateJavascript(
+                "window.MyTubeFsTapProbe && window.MyTubeFsTapProbe();" +
+                    "window.MyTubeFsArmPromote && window.MyTubeFsArmPromote()", null
+            )
+            val downEvent = newTouch(down, down, MotionEvent.ACTION_DOWN, x, y)
+            val downHandled = wv.dispatchTouchEvent(downEvent)
+            downEvent.recycle()
+            // Held long enough that the renderer classifies it as a tap rather than
+            // the start of a scroll or a long press.
+            mainHandler.postDelayed({
+                val upEvent = newTouch(down, SystemClock.uptimeMillis(), MotionEvent.ACTION_UP, x, y)
+                val upHandled = wv.dispatchTouchEvent(upEvent)
+                upEvent.recycle()
+                Log.d(TAG, "tap fs: dispatched tap at ${x.toInt()},${y.toInt()} handled=$downHandled/$upHandled")
+                // YouTube's chrome owns its own visibility from here; leaving ours
+                // forced on would pin a hidden-chrome state over the real fullscreen UI.
+                restoreFullscreenChrome(mode)
+                onAttempted(true)
+            }, TAP_HOLD_MS)
+        }
+    }
+
+    private fun restoreFullscreenChrome(mode: BrowserMode) {
+        evaluateJsIn(mode, "window.MyTubeFsRestoreChrome && window.MyTubeFsRestoreChrome()")
+    }
+
+    private fun newTouch(
+        downTime: Long,
+        eventTime: Long,
+        action: Int,
+        x: Float,
+        y: Float
+    ): MotionEvent = MotionEvent.obtain(downTime, eventTime, action, x, y, 0).apply {
+        // Chromium's gesture recogniser keys off the tool type, and a finger is what
+        // grants activation; the default source is unknown.
+        source = InputDevice.SOURCE_TOUCHSCREEN
     }
 
     fun exitNativeFullscreen(mode: BrowserMode) {

@@ -19,7 +19,6 @@ class PreferencesManager(private val context: Context) {
         val AUTO_PIP = booleanPreferencesKey("auto_pip")
         val ADBLOCK_ENABLED = booleanPreferencesKey("adblock_enabled")
         val AUTO_HIDE_BAR = booleanPreferencesKey("auto_hide_bar")
-        val NATIVE_VIDEO_FULLSCREEN = booleanPreferencesKey("native_video_fullscreen")
         val ROTATE_FULLSCREEN = stringPreferencesKey("rotate_fullscreen")
         val NOTIF_PERM_REQUESTED = booleanPreferencesKey("notif_perm_requested")
         val SHOW_YOUTUBE_LINK = booleanPreferencesKey("show_youtube_link")
@@ -40,8 +39,6 @@ class PreferencesManager(private val context: Context) {
     val autoPip: Flow<Boolean> = context.dataStore.data.map { it[AUTO_PIP] ?: true }
     val adblockEnabled: Flow<Boolean> = context.dataStore.data.map { it[ADBLOCK_ENABLED] ?: true }
     val autoHideBar: Flow<Boolean> = context.dataStore.data.map { it[AUTO_HIDE_BAR] ?: false }
-    val nativeVideoFullscreen: Flow<Boolean> =
-        context.dataStore.data.map { it[NATIVE_VIDEO_FULLSCREEN] ?: false }
     val rotateFullscreenMode: Flow<RotateFullscreenMode> =
         context.dataStore.data.map { RotateFullscreenMode.fromStorage(it[ROTATE_FULLSCREEN]) }
     val notifPermissionRequested: Flow<Boolean> = context.dataStore.data.map { it[NOTIF_PERM_REQUESTED] ?: false }
@@ -76,7 +73,6 @@ class PreferencesManager(private val context: Context) {
     }
 
     suspend fun setNativeVideoFullscreen(enabled: Boolean) {
-        context.dataStore.edit { it[NATIVE_VIDEO_FULLSCREEN] = enabled }
     }
 
     suspend fun setRotateFullscreenMode(mode: RotateFullscreenMode) {

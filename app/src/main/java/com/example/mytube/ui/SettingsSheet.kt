@@ -45,7 +45,6 @@ fun SettingsSheet(
     val adblockEnabled by viewModel.adblockEnabled.collectAsState()
     val autoHideBar by viewModel.autoHideBar.collectAsState()
     val rotateFullscreenMode by viewModel.rotateFullscreenMode.collectAsState()
-    val nativeVideoFullscreen by viewModel.nativeVideoFullscreen.collectAsState()
     val showYoutubeLink by viewModel.showYoutubeLink.collectAsState()
     val showMusicLink by viewModel.showMusicLink.collectAsState()
     val showMoviesLink by viewModel.showMoviesLink.collectAsState()
@@ -95,15 +94,6 @@ fun SettingsSheet(
                 RotateFullscreenPicker(
                     selected = rotateFullscreenMode,
                     onSelect = { viewModel.setRotateFullscreenMode(it) }
-                )
-                Spacer(Modifier.height(4.dp))
-                SettingsToggle("Use native video fullscreen", nativeVideoFullscreen) {
-                    viewModel.setNativeVideoFullscreen(it)
-                }
-                Text(
-                    "Experimental. Uses the browser's own fullscreen API, which Android WebView gates behind a real touch gesture and often refuses. Falls back to the built-in fullscreen automatically.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(Modifier.height(8.dp))
                 HorizontalDivider()

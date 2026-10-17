@@ -73,10 +73,6 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope, SharingStarted.Eagerly, RotateFullscreenMode.DEFAULT
     )
 
-    val nativeVideoFullscreen = prefsManager.nativeVideoFullscreen.stateIn(
-        viewModelScope, SharingStarted.Eagerly, false
-    )
-
     val showYoutubeLink = prefsManager.showYoutubeLink.stateIn(
         viewModelScope, SharingStarted.Eagerly, true
     )

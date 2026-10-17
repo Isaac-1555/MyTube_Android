@@ -225,14 +225,53 @@ fun BrowserScreen(
             }
         }
 
-        // Deliberately not a tap-to-exit gesture: YouTube owns single-tap (play/pause)
-        // and double-tap (seek), and intercepting either would break them.
-        if (fullscreenActive && !isInPipMode) {
+// Deliberately not a tap-to-exit gesture: YouTube owns single-tap (play/pause)
+// and double-tap (seek), and intercepting either would break them.
+//
+// Only while YouTube has not taken over. Once it is in its own fullscreen it draws
+// its own exit control and a second one just sits on top of it. Note this keys off
+// isNativeFullscreen and not isCssFullscreen: the chrome-hiding stylesheet stays on
+// for the whole of native fullscreen, so both flags are true at that point.
+if (fullscreenActive && !fullscreenController.isNativeFullscreen && !isInPipMode) {
             FullscreenExitChip(
                 onClick = { fullscreenController.exitByUser() },
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(top = 48.dp, end = 16.dp)
+            )
+        }
+
+// YouTube's mobile-web player ships no lock control at all - not in any state, not
+        // under any class name - so there is nothing of its own to show here. Ours sits
+        // in the top corner and, when locked, clears YouTube's controls, which is the
+        // closest equivalent to what the button does on the desktop player. Only in
+        // fullscreen: the bottom bar already carries a lock toggle.
+        if (fullscreenActive && !isInPipMode) {
+            LockChip(
+                locked = isLocked,
+                onToggle = { viewModel.toggleLock() },
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 48.dp, end = 16.dp)
+            )
+        }
+
+        // While locked, everything below is dead, including the exit chip. Drawn
+        // after the chip above so that one stays tappable.
+        if (isLocked && !isInPipMode) {
+            LockOverlay(modifier = Modifier.fillMaxSize())
+            LockChip(
+                locked = true,
+                onToggle = { viewModel.toggleLock() },
+                modifier = if (fullscreenActive) {
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = 48.dp, end = 16.dp)
+                } else {
+                    Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(16.dp)
+                }
             )
         }
 
@@ -247,17 +286,6 @@ fun BrowserScreen(
                 dismissButton = {
                     TextButton(onClick = { viewModel.dismissExitDialog() }) { Text("Cancel") }
                 }
-            )
-        }
-
-        if (isLocked && !isInPipMode && !fullscreenActive) {
-            LockOverlay(modifier = Modifier.fillMaxSize())
-            LockChip(
-                locked = true,
-                onToggle = { viewModel.toggleLock() },
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(16.dp)
             )
         }
 

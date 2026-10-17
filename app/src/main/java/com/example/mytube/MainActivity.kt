@@ -54,8 +54,7 @@ class MainActivity : ComponentActivity() {
 
         fullscreenController = VideoFullscreenController(
             activity = this,
-            webViewManager = browserViewModel.webViewManager,
-            nativeFullscreenEnabled = { settingsViewModel.nativeVideoFullscreen.value }
+            webViewManager = browserViewModel.webViewManager
         )
         browserViewModel.webViewManager.onCustomViewShown = {
             fullscreenController.onNativeFullscreenShown()

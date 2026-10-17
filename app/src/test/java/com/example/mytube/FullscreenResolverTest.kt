@@ -13,7 +13,7 @@ class FullscreenResolverTest {
     private fun inputs(
         pref: RotateFullscreenMode = RotateFullscreenMode.ON_ROTATE,
         mode: BrowserMode = BrowserMode.YOUTUBE,
-        video: VideoState = VideoState(hasVideo = true, isWatchPage = true, isPlaying = true),
+        video: VideoState = VideoState(hasVideo = true, isWatchPage = true),
         isLandscape: Boolean = false,
         isPip: Boolean = false,
         isLocked: Boolean = false,
@@ -87,7 +87,7 @@ class FullscreenResolverTest {
         }
     }
 
-    // ---- rule 3: never fight the window or the input lock ---------------------
+    // ---- rule 3: never fight the system for the window ---------------------
 
     @Test
     fun `pip forces exit`() {
@@ -98,30 +98,34 @@ class FullscreenResolverTest {
     }
 
     @Test
-    fun `input lock forces exit`() {
-        assertEquals(
-            FullscreenDecision.Exit,
-            resolve(inputs(isLandscape = true, isLocked = true))
-        )
-    }
-
-    @Test
-    fun `always mode still yields to pip and lock`() {
+    fun `always mode still yields to pip`() {
         assertEquals(
             FullscreenDecision.Exit,
             resolve(inputs(pref = RotateFullscreenMode.ALWAYS, isPip = true))
         )
+    }
+
+    /**
+     * The input lock is offered inside fullscreen, so it must not be a reason to leave
+     * it. Locking mid-fullscreen used to kick the app straight back to portrait.
+     */
+    @Test
+    fun `input lock does not end fullscreen`() {
+        assertEquals(
+            FullscreenDecision.Enter,
+            resolve(inputs(isLandscape = true, isLocked = true))
+        )
         assertEquals(
             FullscreenDecision.Exit,
-            resolve(inputs(pref = RotateFullscreenMode.ALWAYS, isLocked = true))
+            resolve(inputs(isLandscape = false, isLocked = true))
         )
     }
 
-    // ---- rule 4: only when there is a video actually playing -------------------
+    // ---- rule 4: only when there is a video on a watch page -------------------
 
     @Test
     fun `home feed in landscape does nothing`() {
-        val home = VideoState(hasVideo = false, isWatchPage = false, isPlaying = false)
+        val home = VideoState(hasVideo = false, isWatchPage = false)
         assertEquals(
             FullscreenDecision.Exit,
             resolve(inputs(video = home, isLandscape = true))
@@ -129,29 +133,47 @@ class FullscreenResolverTest {
     }
 
     @Test
-    fun `paused video in landscape exits`() {
-        val paused = VideoState(hasVideo = true, isWatchPage = true, isPlaying = false)
-        assertEquals(
-            FullscreenDecision.Exit,
-            resolve(inputs(video = paused, isLandscape = true))
-        )
-    }
-
-    @Test
     fun `video outside a watch page does not engage`() {
-        val notWatch = VideoState(hasVideo = true, isWatchPage = false, isPlaying = true)
+        val notWatch = VideoState(hasVideo = true, isWatchPage = false)
         assertEquals(
             FullscreenDecision.Exit,
             resolve(inputs(video = notWatch, isLandscape = true))
         )
     }
 
+    /**
+     * The regression that made tapping to pause kick the app out of fullscreen: a
+     * pause used to report "not watchable" and the resolver read it as nothing to
+     * watch.
+     */
     @Test
-    fun `video element present but not playing does not engage`() {
-        val idle = VideoState(hasVideo = true, isWatchPage = true, isPlaying = false)
+    fun `a watch page with a video stays fullscreen regardless of playback state`() {
+        val watching = VideoState(hasVideo = true, isWatchPage = true)
+        assertEquals(
+            FullscreenDecision.Enter,
+            resolve(inputs(video = watching, isLandscape = true))
+        )
         assertEquals(
             FullscreenDecision.Exit,
-            resolve(inputs(video = idle, isLandscape = true))
+            resolve(inputs(video = watching, isLandscape = false))
+        )
+    }
+
+    @Test
+    fun `video element gone exits fullscreen`() {
+        val gone = VideoState(hasVideo = false, isWatchPage = true)
+        assertEquals(
+            FullscreenDecision.Exit,
+            resolve(inputs(video = gone, isLandscape = true))
+        )
+    }
+
+    @Test
+    fun `leaving the watch page exits fullscreen`() {
+        val home = VideoState(hasVideo = false, isWatchPage = false)
+        assertEquals(
+            FullscreenDecision.Exit,
+            resolve(inputs(video = home, isLandscape = true))
         )
     }
 
@@ -230,11 +252,10 @@ class FullscreenResolverTest {
     // ---- video state -----------------------------------------------------------
 
     @Test
-    fun `watchable requires all three signals`() {
-        assertEquals(true, VideoState(true, true, true).isWatchable)
-        assertEquals(false, VideoState(false, true, true).isWatchable)
-        assertEquals(false, VideoState(true, false, true).isWatchable)
-        assertEquals(false, VideoState(true, true, false).isWatchable)
+    fun `watchable needs both signals`() {
+        assertEquals(true, VideoState(true, true).isWatchable)
+        assertEquals(false, VideoState(false, true).isWatchable)
+        assertEquals(false, VideoState(true, false).isWatchable)
     }
 
     @Test
