@@ -41,6 +41,10 @@ fun SettingsSheet(
     val autoPip by viewModel.autoPip.collectAsState()
     val adblockEnabled by viewModel.adblockEnabled.collectAsState()
     val autoHideBar by viewModel.autoHideBar.collectAsState()
+    val showYoutubeLink by viewModel.showYoutubeLink.collectAsState()
+    val showMusicLink by viewModel.showMusicLink.collectAsState()
+    val showMoviesLink by viewModel.showMoviesLink.collectAsState()
+    val showAnimeLink by viewModel.showAnimeLink.collectAsState()
     val moviesSource by viewModel.moviesSourceUrl.collectAsState(initial = null)
     val animeSource by viewModel.animeSourceUrl.collectAsState(initial = null)
     var moviesText by remember(moviesSource) { mutableStateOf(moviesSource ?: "") }
@@ -72,6 +76,18 @@ fun SettingsSheet(
                 }
                 SettingsToggle("Auto-hide Bottom Bar", autoHideBar) {
                     viewModel.setAutoHideBar(it)
+                }
+                SettingsToggle("YouTube Button", showYoutubeLink) {
+                    viewModel.setShowYoutubeLink(it)
+                }
+                SettingsToggle("YouTube Music Button", showMusicLink) {
+                    viewModel.setShowMusicLink(it)
+                }
+                SettingsToggle("Movies Button", showMoviesLink) {
+                    viewModel.setShowMoviesLink(it)
+                }
+                SettingsToggle("Anime Button", showAnimeLink) {
+                    viewModel.setShowAnimeLink(it)
                 }
                 Spacer(Modifier.height(8.dp))
                 HorizontalDivider()

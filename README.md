@@ -120,6 +120,7 @@ The bottom bar is the only chrome the app draws — everything above it is the r
 - **Exit** — swiping back from your first page shows an *Exit MyTube?* dialog.
 - **Picture-in-Picture** — leave the app to enter PiP (enable **Auto PiP** in Settings), or use the system gesture.
 - **Bottom bar** — hides after 5 seconds when **Auto-hide Bottom Bar** is enabled; tap anywhere to bring it back.
+- **Hiding link buttons** — each site button (YouTube, YouTube Music, Movies, Anime) can be switched off individually in Settings. The button for the tab you are currently on always stays visible, so you can never get stranded on a hidden tab.
 
 ### Settings
 
@@ -129,6 +130,10 @@ The bottom bar is the only chrome the app draws — everything above it is the r
 | **Auto PiP** | Automatically enter Picture-in-Picture when you leave the app |
 | **Ad Blocking** | Enable hosts + scriptlet based ad blocking |
 | **Auto-hide Bottom Bar** | Hide the bottom controls after a few seconds of inactivity |
+| **YouTube Button** | Show the YouTube link in the bottom bar |
+| **YouTube Music Button** | Show the YouTube Music link in the bottom bar |
+| **Movies Button** | Show the Movies link in the bottom bar |
+| **Anime Button** | Show the Anime link in the bottom bar |
 | **Movies URL / Anime URL** | Override the mirror used by the Movies and Anime tabs |
 
 > Movies and Anime rely on public streaming mirrors that rotate or get taken down. If a tab stops loading, open **Settings** and paste the current home URL.

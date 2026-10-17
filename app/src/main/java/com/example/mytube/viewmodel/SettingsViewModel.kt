@@ -22,6 +22,14 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
     val autoHideBar: StateFlow<Boolean> = container.prefsManager.autoHideBar
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    val showYoutubeLink: StateFlow<Boolean> = container.prefsManager.showYoutubeLink
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+    val showMusicLink: StateFlow<Boolean> = container.prefsManager.showMusicLink
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+    val showMoviesLink: StateFlow<Boolean> = container.prefsManager.showMoviesLink
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+    val showAnimeLink: StateFlow<Boolean> = container.prefsManager.showAnimeLink
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
     val moviesSourceUrl: Flow<String?> = container.prefsManager.moviesSourceUrl
     val animeSourceUrl: Flow<String?> = container.prefsManager.animeSourceUrl
@@ -48,5 +56,21 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun setAutoHideBar(enabled: Boolean) {
         viewModelScope.launch { container.prefsManager.setAutoHideBar(enabled) }
+    }
+
+    fun setShowYoutubeLink(enabled: Boolean) {
+        viewModelScope.launch { container.prefsManager.setShowYoutubeLink(enabled) }
+    }
+
+    fun setShowMusicLink(enabled: Boolean) {
+        viewModelScope.launch { container.prefsManager.setShowMusicLink(enabled) }
+    }
+
+    fun setShowMoviesLink(enabled: Boolean) {
+        viewModelScope.launch { container.prefsManager.setShowMoviesLink(enabled) }
+    }
+
+    fun setShowAnimeLink(enabled: Boolean) {
+        viewModelScope.launch { container.prefsManager.setShowAnimeLink(enabled) }
     }
 }

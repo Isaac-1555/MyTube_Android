@@ -65,6 +65,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.example.mytube.R
+import com.example.mytube.browser.BrowserMode
 import com.example.mytube.ui.components.BrowserWebView
 import com.example.mytube.util.Constants
 import com.example.mytube.viewmodel.BrowserViewModel
@@ -84,6 +85,15 @@ fun BrowserScreen(
     val isLocked by viewModel.isLocked.collectAsState()
     val showExitDialog by viewModel.showExitDialog.collectAsState()
     val autoHideBar by viewModel.autoHideBar.collectAsState()
+    val showYoutubeLink by viewModel.showYoutubeLink.collectAsState()
+    val showMusicLink by viewModel.showMusicLink.collectAsState()
+    val showMoviesLink by viewModel.showMoviesLink.collectAsState()
+    val showAnimeLink by viewModel.showAnimeLink.collectAsState()
+    val activeMode = mgr.activeMode
+    val showYoutube = showYoutubeLink || activeMode == BrowserMode.YOUTUBE
+    val showMusic = showMusicLink || activeMode == BrowserMode.MUSIC
+    val showMovies = showMoviesLink || activeMode == BrowserMode.MOVIES
+    val showAnime = showAnimeLink || activeMode == BrowserMode.ANIME
     var showSleepTimerSheet by remember { mutableStateOf(false) }
     val isFullscreen = mgr.fullscreenView != null
 
@@ -149,6 +159,10 @@ fun BrowserScreen(
                     BottomControls(
                         sleepTimerRemaining = sleepTimerRemaining,
                         isLocked = isLocked,
+                        showYoutube = showYoutube,
+                        showMusic = showMusic,
+                        showMovies = showMovies,
+                        showAnime = showAnime,
                         onReload = { viewModel.reload() },
                         onYoutube = { viewModel.switchToYoutube() },
                         onYoutubeMusic = { viewModel.switchToYoutubeMusic() },
@@ -219,6 +233,10 @@ fun BrowserScreen(
 private fun BottomControls(
     sleepTimerRemaining: Long?,
     isLocked: Boolean,
+    showYoutube: Boolean,
+    showMusic: Boolean,
+    showMovies: Boolean,
+    showAnime: Boolean,
     onReload: () -> Unit,
     onYoutube: () -> Unit,
     onYoutubeMusic: () -> Unit,
@@ -234,7 +252,8 @@ private fun BottomControls(
             .background(MaterialTheme.colorScheme.surface)
     ) {
         val hPadding = 8.dp
-        val buttonCount = 8
+        val linkCount = listOf(showYoutube, showMusic, showMovies, showAnime).count { it }
+        val buttonCount = linkCount + 4
         val timerReserve = if (sleepTimerRemaining != null) 56.dp else 0.dp
         val itemSize = minOf(
             48.dp,
@@ -251,17 +270,25 @@ private fun BottomControls(
             IconButton(onClick = onReload, enabled = !isLocked, modifier = Modifier.size(itemSize)) {
                 Icon(Icons.Default.Refresh, contentDescription = "Reload", modifier = Modifier.size(iconSize))
             }
-            IconButton(onClick = onYoutube, enabled = !isLocked, modifier = Modifier.size(itemSize)) {
-                Icon(painterResource(R.drawable.ic_youtube), contentDescription = "YouTube", modifier = Modifier.size(iconSize))
+            if (showYoutube) {
+                IconButton(onClick = onYoutube, enabled = !isLocked, modifier = Modifier.size(itemSize)) {
+                    Icon(painterResource(R.drawable.ic_youtube), contentDescription = "YouTube", modifier = Modifier.size(iconSize))
+                }
             }
-            IconButton(onClick = onYoutubeMusic, enabled = !isLocked, modifier = Modifier.size(itemSize)) {
-                Icon(painterResource(R.drawable.ic_youtube_music), contentDescription = "YouTube Music", modifier = Modifier.size(iconSize))
+            if (showMusic) {
+                IconButton(onClick = onYoutubeMusic, enabled = !isLocked, modifier = Modifier.size(itemSize)) {
+                    Icon(painterResource(R.drawable.ic_youtube_music), contentDescription = "YouTube Music", modifier = Modifier.size(iconSize))
+                }
             }
-            IconButton(onClick = onMovies, enabled = !isLocked, modifier = Modifier.size(itemSize)) {
-                Icon(painterResource(R.drawable.ic_clapperboard), contentDescription = "Movies", modifier = Modifier.size(iconSize))
+            if (showMovies) {
+                IconButton(onClick = onMovies, enabled = !isLocked, modifier = Modifier.size(itemSize)) {
+                    Icon(painterResource(R.drawable.ic_clapperboard), contentDescription = "Movies", modifier = Modifier.size(iconSize))
+                }
             }
-            IconButton(onClick = onAnime, enabled = !isLocked, modifier = Modifier.size(itemSize)) {
-                Icon(painterResource(R.drawable.ic_shell), contentDescription = "Anime", modifier = Modifier.size(iconSize))
+            if (showAnime) {
+                IconButton(onClick = onAnime, enabled = !isLocked, modifier = Modifier.size(itemSize)) {
+                    Icon(painterResource(R.drawable.ic_shell), contentDescription = "Anime", modifier = Modifier.size(iconSize))
+                }
             }
             Spacer(Modifier.weight(1f))
             IconButton(onClick = onSleepTimer, enabled = !isLocked, modifier = Modifier.size(itemSize)) {

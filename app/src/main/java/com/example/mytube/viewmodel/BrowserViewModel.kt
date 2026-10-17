@@ -68,6 +68,22 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope, SharingStarted.Eagerly, false
     )
 
+    val showYoutubeLink = prefsManager.showYoutubeLink.stateIn(
+        viewModelScope, SharingStarted.Eagerly, true
+    )
+
+    val showMusicLink = prefsManager.showMusicLink.stateIn(
+        viewModelScope, SharingStarted.Eagerly, true
+    )
+
+    val showMoviesLink = prefsManager.showMoviesLink.stateIn(
+        viewModelScope, SharingStarted.Eagerly, true
+    )
+
+    val showAnimeLink = prefsManager.showAnimeLink.stateIn(
+        viewModelScope, SharingStarted.Eagerly, true
+    )
+
     val notifPermissionRequested = prefsManager.notifPermissionRequested.stateIn(
         viewModelScope, SharingStarted.Eagerly, false
     )
