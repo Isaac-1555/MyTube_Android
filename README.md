@@ -59,6 +59,19 @@
 - **Auto-hide bottom bar** — the bar fades away after 5s of inactivity and returns on touch.
 - **Configurable sources** — if a Movies/Anime mirror rotates or goes down, paste a new home URL in Settings; the tab moves there at once.
 
+## What's New in v2.11.1
+
+The PiP window plays properly now — the picture, the sound and the notification all keep still.
+
+- **The PiP window no longer stutters or re-buffers.** YouTube's own player pauses the video by itself when the window becomes a PiP window, and it pauses it again after every play. MyTube was resuming the video, YouTube was pausing it again, and the two fought over it several times a second. That fight was the stutter: every cycle restarted the audio and made the player re-seek and re-buffer. The pause is now refused in a PiP window, unless you ask for it — a tap in the window and the notification still pause it as they should.
+- **The notification stopped flipping between pause and play.** The pause that the app undoes is not reported, and a pause is confirmed before it is announced, so the media card says "playing" and means it.
+- **Background playback was fighting the browser too.** Chromium reads a page's visibility from a callback the app was not overriding, so the browser paused the media every time the window went away. The page is now reported as visible while the playback is meant to run.
+- **Less churn in the page.** The rule that hides the page around the video no longer touches the player's own elements — it could hide the video itself — and it only rewrites what actually changed. The observer that watches the page runs once per frame instead of once per change, and the player model is worked out a few times a second rather than on every change YouTube makes to the page.
+- **The right video is watched.** After a player rebuild the first `<video>` in the document is the old, paused one, so the app used to report "playback stopped" and resume the wrong element.
+- **Less traffic to the app.** The playback position is reported in five-second steps instead of one, and a PiP window is no longer treated as a background state, so the heartbeat and the page tick do not run against it.
+
+Verified on device (Pixel, Android 16): dropped frames 0/1151 in the PiP window, the position advances without a break, and the notification makes no pause/play transitions.
+
 ## What's New in v2.11.0
 
 Fullscreen and PiP rebuilt against the player YouTube actually ships now — and a source set in Settings finally does something.
@@ -113,7 +126,7 @@ Under the hood, rotate-to-fullscreen no longer fakes it: MyTube taps YouTube's o
 
 Grab the latest signed APK from the **[Releases page](https://github.com/Isaac-1555/MyTube_Android/releases/latest)**.
 
-Direct download: **[MyTube-v2.11.0-release.apk](https://github.com/Isaac-1555/MyTube_Android/releases/download/v2.11.0/MyTube-v2.11.0-release.apk)**
+Direct download: **[MyTube-v2.11.1-release.apk](https://github.com/Isaac-1555/MyTube_Android/releases/download/v2.11.1/MyTube-v2.11.1-release.apk)**
 
 ### Install on Android
 
@@ -126,7 +139,7 @@ Direct download: **[MyTube-v2.11.0-release.apk](https://github.com/Isaac-1555/My
 ### Install with ADB
 
 ```bash
-adb install MyTube-v2.11.0-release.apk
+adb install MyTube-v2.11.1-release.apk
 ```
 
 ### Requirements
@@ -137,7 +150,7 @@ adb install MyTube-v2.11.0-release.apk
 ### Verify the download (optional)
 
 ```bash
-apksigner verify --print-certs MyTube-v2.11.0-release.apk
+apksigner verify --print-certs MyTube-v2.11.1-release.apk
 ```
 
 The release is signed with APK Signature Scheme v2. Certificate SHA-256:
@@ -226,6 +239,17 @@ Then build:
 `keystore.properties`, `*.jks` and `*.keystore` are git-ignored — never commit your signing keys.
 
 ## Changelog
+
+### v2.11.1 — 2026-11-14
+
+- Fix: the PiP window stuttered and re-buffered. YouTube's player pauses the video by itself when the window becomes a PiP window and pauses it again after every play, so the app and the page fought over the video several times a second - every cycle restarted the audio and made the player re-seek and re-buffer. The pause is refused in a PiP window unless the watcher asked for it
+- Fix: the media notification flipped between pause and play several times a second. The pause that the app undoes is not reported to the app, and a pause is confirmed before it is announced
+- Fix: background playback fought the browser. Chromium reads a page's visibility from `onVisibilityAggregated`, which the app did not override, so the browser paused the media whenever the window went away - the app resumed it, and the two fought over it
+- Fix: the rule that hides the page around the video could hide the player's own elements, the video included, which restarted the stream
+- Perf: the page observer runs once per frame instead of once per change, the player model is cached, the overlay refresh is throttled, and the page sweep only rewrites what actually changed instead of restoring and re-hiding every element on the page
+- Fix: the app watched the first `<video>` in the document, which after a player rebuild is the old, paused one, so playback was reported as stopped and the stale element was resumed
+- Perf: the playback position is reported in five-second steps instead of one, and a PiP window is no longer treated as a background state, so the service heartbeat and the page tick do not run against it
+- Build: the WebView's overview mode is set once per tab instead of being switched when the PiP window opens, which re-laid-out the whole page with the video playing
 
 ### v2.11.0 — 2026-11-14
 
