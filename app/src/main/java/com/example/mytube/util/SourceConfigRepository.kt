@@ -29,7 +29,6 @@ class SourceConfigRepository(
     val animeHome: Flow<String> = combine(prefs.animeSourceUrl, prefs.remoteAnimeHome) { user, remote ->
         firstNonBlank(user, remote, Constants.ANIME_HOME)
     }
-
     suspend fun refresh() = withContext(Dispatchers.IO) {
         try {
             val connection = (URL(Constants.SOURCES_CONFIG_URL).openConnection() as HttpURLConnection).apply {
@@ -58,5 +57,8 @@ class SourceConfigRepository(
 }
 
 private fun firstNonBlank(vararg values: String?): String {
-    return values.firstOrNull { !it.isNullOrBlank() }?.trim() ?: Constants.MOVIES_HOME
+    // The last value is the fallback, so it is never blank and never dropped.
+    return values.firstOrNull { !it.isNullOrBlank() }?.trim()
+        ?: values.lastOrNull()?.trim()
+        .orEmpty()
 }

@@ -27,6 +27,17 @@ private const val PEEK_GRACE_MS = 1_200L
 /** How often the guard checks whether a system bar has come back. */
 private const val GUARD_INTERVAL_MS = 250L
 
+/** How long the page is given to leave fullscreen before it is forced out. */
+private const val NATIVE_EXIT_TIMEOUT_MS = 600L
+
+/**
+ * How long to wait before asking the page to lay out again.
+ *
+ * The rotation back to portrait is not over when the orientation is requested:
+ * the window is resized a moment later, and the page has to be told about it.
+ */
+private const val VIEWPORT_REFRESH_DELAY_MS = 400L
+
 /** How long after entry to make the first auto-promote attempt. */
 private const val AUTO_PROMOTE_DELAY_MS = 500L
 
@@ -91,6 +102,12 @@ class VideoFullscreenController(
     /** True while we are tearing fullscreen down ourselves, see [exitAll]. */
     private var tearingDown = false
 
+    /** True while the page has been asked to leave fullscreen but has not yet. */
+    private var pendingNativeExit = false
+
+    /** True while a layout refresh is owed to the page, see [scheduleViewportRefresh]. */
+    private var viewportRefreshPending = false
+
     private var barsGuard: Runnable? = null
     private var lastForcedHideAt = 0L
 
@@ -131,7 +148,24 @@ class VideoFullscreenController(
         isFullscreenActive = true
         webViewManager.setFullscreenCss(fsMode, true)
         Log.d(TAG, "enter: css fullscreen")
+        logModel("enter")
         attemptAutoPromote()
+    }
+
+    /**
+     * Reports what the page thinks its player looks like.
+     *
+     * The player is rebuilt by YouTube between releases and the app's selectors
+     * have to be checked against it, so this says what was actually found rather
+     * than what was assumed.
+     */
+    private fun logModel(tag: String) {
+        webViewManager.evaluateJsInFromMainThread(
+            fsMode,
+            "window.MyTubeFsModel && window.MyTubeFsModel()"
+        ) { json ->
+            Log.d(TAG, "model[$tag] $json")
+        }
     }
 
     /**
@@ -184,9 +218,15 @@ class VideoFullscreenController(
         tearingDown = true
         try {
             if (isNativeFullscreen) {
+                // Ask the page to leave fullscreen and let it do so on its own
+                // schedule. Forcing the custom view down straight away put the
+                // picture back while the page still believed it was fullscreen,
+                // and that is what left the video hanging off the screen after a
+                // rotation back to portrait.
                 webViewManager.exitNativeFullscreen(fsMode)
-                webViewManager.hideCustomView()
                 isNativeFullscreen = false
+                pendingNativeExit = true
+                mainHandler.postDelayed(forceNativeExit, NATIVE_EXIT_TIMEOUT_MS)
             }
 
             if (isCssFullscreen) {
@@ -199,7 +239,46 @@ class VideoFullscreenController(
 
         isFullscreenActive = false
         restoreWindow()
+        scheduleViewportRefresh()
         logBars("exit")
+        logModel("exit")
+    }
+
+    /** The page did not leave fullscreen on its own. Take it down. */
+    private val forceNativeExit = Runnable {
+        if (!pendingNativeExit) return@Runnable
+        pendingNativeExit = false
+        webViewManager.hideCustomView()
+    }
+
+    /**
+     * Asks the page to lay out for the size the window has now.
+     *
+     * Scheduled rather than done straight away: the rotation back to portrait is
+     * requested here but happens a moment later, and the page has to be told
+     * about the new size or it keeps the landscape picture.
+     */
+    private fun scheduleViewportRefresh() {
+        viewportRefreshPending = true
+        mainHandler.removeCallbacks(viewportRefreshRunnable)
+        mainHandler.postDelayed(viewportRefreshRunnable, VIEWPORT_REFRESH_DELAY_MS)
+    }
+
+    private val viewportRefreshRunnable = Runnable {
+        viewportRefreshPending = false
+        webViewManager.refreshViewport(fsMode)
+    }
+
+    /**
+     * The window changed shape. The page has to be told, or it keeps the layout
+     * it had in the other orientation.
+     */
+    fun onConfigChanged() {
+        if (viewportRefreshPending) {
+            mainHandler.removeCallbacks(viewportRefreshRunnable)
+            mainHandler.postDelayed(viewportRefreshRunnable, 120)
+        }
+        reassertIfActive()
     }
 
     /** Back button, or any explicit user exit. Must not immediately re-engage. */
@@ -390,6 +469,9 @@ class VideoFullscreenController(
     }
 
     fun onNativeFullscreenHidden() {
+        // The page left fullscreen on its own. The forced exit is not needed.
+        pendingNativeExit = false
+        mainHandler.removeCallbacks(forceNativeExit)
         isNativeFullscreen = false
         if (isFullscreenActive) {
             isFullscreenActive = false

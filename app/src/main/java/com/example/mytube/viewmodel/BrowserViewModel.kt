@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.mytube.MyTubeApplication
 import com.example.mytube.browser.BrowserMode
 import com.example.mytube.browser.RotateFullscreenMode
+import com.example.mytube.browser.SourceUrlPolicy
 import com.example.mytube.browser.isYoutubeFamily
 import com.example.mytube.util.Constants
 import kotlinx.coroutines.Dispatchers
@@ -30,8 +31,14 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     private var musicLastUrlCache: String? = null
     private var moviesLastUrlCache: String? = null
     private var animeLastUrlCache: String? = null
-    private var moviesHomeCache: String = Constants.MOVIES_HOME
-    private var animeHomeCache: String = Constants.ANIME_HOME
+
+    /** The source the user set in Settings, if any. It owns the tab. */
+    private var moviesUserUrl: String? = null
+    private var animeUserUrl: String? = null
+
+    /** The home advertised by the remote config, if any. */
+    private var moviesRemoteHome: String? = null
+    private var animeRemoteHome: String? = null
 
     fun switchToYoutube() {
         webViewManager.activate(BrowserMode.YOUTUBE)
@@ -49,17 +56,37 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
     fun switchToMovies() {
         webViewManager.activate(BrowserMode.MOVIES)
+        val home = moviesHome()
         if (webViewManager.moviesWebView == null) {
-            webViewManager.pendingMoviesUrl = moviesLastUrlCache ?: moviesHomeCache
+            // A source set in Settings owns the tab: it opens that URL, not the
+            // page that happened to be visited last.
+            webViewManager.pendingMoviesUrl = SourceUrlPolicy.resolveTarget(
+                moviesUserUrl, moviesRemoteHome, Constants.MOVIES_HOME, moviesLastUrlCache
+            )
+        } else if (!moviesUserUrl.isNullOrBlank()) {
+            webViewManager.ensureHost(BrowserMode.MOVIES, home)
         }
     }
 
     fun switchToAnime() {
         webViewManager.activate(BrowserMode.ANIME)
+        val home = animeHome()
         if (webViewManager.animeWebView == null) {
-            webViewManager.pendingAnimeUrl = animeLastUrlCache ?: animeHomeCache
+            // A source set in Settings owns the tab: it opens that URL, not the
+            // page that happened to be visited last.
+            webViewManager.pendingAnimeUrl = SourceUrlPolicy.resolveTarget(
+                animeUserUrl, animeRemoteHome, Constants.ANIME_HOME, animeLastUrlCache
+            )
+        } else if (!animeUserUrl.isNullOrBlank()) {
+            webViewManager.ensureHost(BrowserMode.ANIME, home)
         }
     }
+
+    private fun moviesHome(): String =
+        SourceUrlPolicy.resolveHome(moviesUserUrl, moviesRemoteHome, Constants.MOVIES_HOME)
+
+    private fun animeHome(): String =
+        SourceUrlPolicy.resolveHome(animeUserUrl, animeRemoteHome, Constants.ANIME_HOME)
 
     val bgPlaybackEnabled = prefsManager.backgroundPlayback.stateIn(
         viewModelScope, SharingStarted.Eagerly, true
@@ -234,16 +261,33 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             prefsManager.animeLastUrl.collect { animeLastUrlCache = it }
         }
         viewModelScope.launch {
-            container.sourceConfig.moviesHome.collect { moviesHomeCache = it }
+            prefsManager.remoteMoviesHome.collect { moviesRemoteHome = it }
         }
         viewModelScope.launch {
-            container.sourceConfig.animeHome.collect { animeHomeCache = it }
+            prefsManager.remoteAnimeHome.collect { animeRemoteHome = it }
+        }
+        // A source set in Settings takes effect at once: the tab moves to it and
+        // the old site is forgotten. Setting it used to do nothing at all, because
+        // the tab kept its own WebView and carried on showing the old site.
+        viewModelScope.launch {
+            prefsManager.moviesSourceUrl.collect { url ->
+                if (url == moviesUserUrl) return@collect
+                moviesUserUrl = url
+                applySourceOverride(BrowserMode.MOVIES)
+            }
+        }
+        viewModelScope.launch {
+            prefsManager.animeSourceUrl.collect { url ->
+                if (url == animeUserUrl) return@collect
+                animeUserUrl = url
+                applySourceOverride(BrowserMode.ANIME)
+            }
         }
         viewModelScope.launch { container.sourceConfig.refresh() }
         webViewManager.homeResolver = { mode ->
             when (mode) {
-                BrowserMode.MOVIES -> moviesHomeCache
-                BrowserMode.ANIME -> animeHomeCache
+                BrowserMode.MOVIES -> moviesHome()
+                BrowserMode.ANIME -> animeHome()
                 BrowserMode.YOUTUBE -> null
                 BrowserMode.MUSIC -> null
             }
@@ -251,6 +295,26 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         // Ad domain blocking in WebViewManager.shouldInterceptRequest.
         // Scriptlet handles ad stripping + YouTube internal config disabling.
         webViewManager.shouldIntercept = { null }
+    }
+
+    /**
+     * Points a tab at the source it has been given and forgets the old one.
+     *
+     * The tab's own WebView survives the change, so without this it carried on
+     * showing the previous site and the setting had no visible effect.
+     */
+    private fun applySourceOverride(mode: BrowserMode) {
+        val home = when (mode) {
+            BrowserMode.MOVIES -> moviesHome()
+            BrowserMode.ANIME -> animeHome()
+            else -> return
+        }
+        webViewManager.applySourceUrl(mode, home)
+        // The old site must not be resumed on the next start.
+        viewModelScope.launch {
+            if (mode == BrowserMode.MOVIES) prefsManager.clearMoviesLastUrl()
+            else prefsManager.clearAnimeLastUrl()
+        }
     }
 
     private fun injectScriptlets(url: String) {

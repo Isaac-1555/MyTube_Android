@@ -227,7 +227,7 @@ class WebViewManager {
         webView = wv
         val initial = pendingYoutubeUrl ?: Constants.YOUTUBE_HOME
         pendingYoutubeUrl = null
-        wv.loadUrl(initial)
+        wv.loadUrl(normalizeUrl(initial))
         return wv
     }
 
@@ -237,7 +237,7 @@ class WebViewManager {
         musicWebView = wv
         val initial = pendingMusicUrl ?: Constants.YOUTUBE_MUSIC_HOME
         pendingMusicUrl = null
-        wv.loadUrl(initial)
+        wv.loadUrl(normalizeUrl(initial))
         return wv
     }
 
@@ -248,7 +248,7 @@ class WebViewManager {
             ?: homeResolver?.invoke(BrowserMode.MOVIES)
             ?: Constants.MOVIES_HOME
         pendingMoviesUrl = null
-        wv.loadUrl(initial)
+        wv.loadUrl(normalizeUrl(initial))
         return wv
     }
 
@@ -259,7 +259,7 @@ class WebViewManager {
             ?: homeResolver?.invoke(BrowserMode.ANIME)
             ?: Constants.ANIME_HOME
         pendingAnimeUrl = null
-        wv.loadUrl(initial)
+        wv.loadUrl(normalizeUrl(initial))
         return wv
     }
 
@@ -314,7 +314,9 @@ class WebViewManager {
                 @Suppress("DEPRECATION")
                 databaseEnabled = true
                 useWideViewPort = true
-                loadWithOverviewMode = true
+                // The PiP window is small; the overview mode would zoom the page
+                // out to fit and put the page layout next to the video.
+                loadWithOverviewMode = !videoOnlyMode
                 builtInZoomControls = false
                 setSupportZoom(false)
                 mediaPlaybackRequiresUserGesture = false
@@ -671,11 +673,84 @@ class WebViewManager {
     fun setVideoOnlyMode(enabled: Boolean) {
         if (videoOnlyMode == enabled) return
         videoOnlyMode = enabled
+        val wv = activeWebView()
+        // The PiP window is small. With the overview mode on, Chromium widens the
+        // layout viewport to the page's minimum width and scales the lot down, and
+        // that is how a related-videos sidebar ends up next to the video. Turning
+        // it off for the duration of PiP keeps the layout viewport the width of
+        // the window, so 100vw is what the user actually sees.
+        wv?.settings?.loadWithOverviewMode = !enabled
         evaluateJs(
             "(function(){var s=document.getElementById('mytube-pip-video-only');" +
                 "if(s&&s.parentNode){s.parentNode.removeChild(s);}" +
                 "window.MyTubeSetPipMode&&window.MyTubeSetPipMode($enabled);})()"
         )
+    }
+
+    /**
+     * Points a movies or anime tab at a new home URL.
+     *
+     * A tab keeps its own WebView for the whole session, so a source changed in
+     * Settings did nothing at all: the tab carried on showing the page it was
+     * already on. The cache is dropped as well, so the new home is not served a
+     * stale copy of the old one.
+     */
+    fun applySourceUrl(mode: BrowserMode, url: String) {
+        val target = normalizeUrl(url)
+        when (mode) {
+            BrowserMode.ANIME -> pendingAnimeUrl = target
+            BrowserMode.MOVIES -> pendingMoviesUrl = target
+            else -> return
+        }
+        val wv = webViewFor(mode) ?: return
+        wv.clearCache(true)
+        wv.loadUrl(target)
+        Log.d(TAG, "source: $mode now points at $target")
+    }
+
+    /**
+     * Makes sure a tab is showing the site it is configured for. Same host: left
+     * alone, so the user does not lose the page they are on. Different host:
+     * navigated to the configured home.
+     */
+    fun ensureHost(mode: BrowserMode, url: String) {
+        val wv = webViewFor(mode) ?: return
+        val current = wv.url ?: return
+        val target = normalizeUrl(url)
+        if (SourceUrlPolicy.sameOrigin(current, target)) return
+        wv.loadUrl(target)
+    }
+
+    /**
+     * A source typed without a scheme is a hostname, and a WebView will not
+     * load one: it reads "hianimes.se" as a cleartext address and refuses it.
+     */
+    private fun normalizeUrl(url: String): String {
+        val trimmed = url.trim()
+        if (trimmed.isEmpty()) return trimmed
+        if (trimmed.startsWith("http://", true) || trimmed.startsWith("https://", true)) {
+            return trimmed
+        }
+        return "https://$trimmed"
+    }
+
+    /**
+     * Makes the page lay out again for the size the window has now.
+     *
+     * Chromium does not always re-layout when the WebView is resized, and a page
+     * that still believes it is in landscape keeps the landscape picture after a
+     * rotation back to portrait - the video then hangs off the screen.
+     */
+    fun refreshViewport(mode: BrowserMode) {
+        val wv = webViewFor(mode) ?: return
+        wv.requestLayout()
+        // Re-applying the wide-viewport flag makes Chromium recompute the layout
+        // viewport. Setting it to the value it already has does nothing, so it
+        // goes off and on again.
+        val wide = wv.settings.useWideViewPort
+        wv.settings.useWideViewPort = false
+        wv.settings.useWideViewPort = wide
+        evaluateJsIn(mode, "window.MyTubeFsRefresh && window.MyTubeFsRefresh()")
     }
 
     /** Rotate-to-fullscreen CSS. Always addressed to a specific tab, never "active". */
@@ -806,6 +881,13 @@ class WebViewManager {
 
     fun evaluateJsInFromMainThread(mode: BrowserMode, script: String) {
         mainHandler.post { webViewFor(mode)?.evaluateJavascript(script, null) }
+    }
+
+    /** As [evaluateJsInFromMainThread], with the result handed back. */
+    fun evaluateJsInFromMainThread(mode: BrowserMode, script: String, onResult: (String?) -> Unit) {
+        mainHandler.post {
+            webViewFor(mode)?.evaluateJavascript(script) { onResult(it) }
+        }
     }
 
     fun destroy() {

@@ -115,16 +115,44 @@ class PreferencesManager(private val context: Context) {
         context.dataStore.edit { it[ANIME_LAST_URL] = url }
     }
 
+    /**
+     * Forgets the last page of a tab.
+     *
+     * Used when the source of a tab changes: the tab now belongs to that site, so
+     * resuming the last page of the old one would take the user straight back to
+     * the site they just replaced.
+     */
+    suspend fun clearMoviesLastUrl() {
+        context.dataStore.edit { it.remove(MOVIES_LAST_URL) }
+    }
+
+    suspend fun clearAnimeLastUrl() {
+        context.dataStore.edit { it.remove(ANIME_LAST_URL) }
+    }
+
     suspend fun setMoviesSourceUrl(url: String?) {
         context.dataStore.edit {
-            if (url.isNullOrBlank()) it.remove(MOVIES_SOURCE_URL) else it[MOVIES_SOURCE_URL] = url.trim()
+            if (url.isNullOrBlank()) it.remove(MOVIES_SOURCE_URL) else it[MOVIES_SOURCE_URL] = normalizeSourceUrl(url)
         }
     }
 
     suspend fun setAnimeSourceUrl(url: String?) {
         context.dataStore.edit {
-            if (url.isNullOrBlank()) it.remove(ANIME_SOURCE_URL) else it[ANIME_SOURCE_URL] = url.trim()
+            if (url.isNullOrBlank()) it.remove(ANIME_SOURCE_URL) else it[ANIME_SOURCE_URL] = normalizeSourceUrl(url)
         }
+    }
+
+    /**
+     * A source typed without a scheme is a hostname, and a WebView will not load
+     * one: it reads "hianimes.se" as a cleartext address and refuses it with
+     * ERR_CLEARTEXT_NOT_PERMITTED.
+     */
+    private fun normalizeSourceUrl(url: String): String {
+        val trimmed = url.trim()
+        if (trimmed.startsWith("http://", true) || trimmed.startsWith("https://", true)) {
+            return trimmed
+        }
+        return "https://$trimmed"
     }
 
     suspend fun setRemoteHomes(movies: String?, anime: String?) {

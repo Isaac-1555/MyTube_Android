@@ -57,7 +57,17 @@
 - **Screen lock** — freeze the page and ignore touches, ideal when handing the phone to someone. Also available from inside fullscreen.
 - **Edge-swipe navigation** — swipe from the left edge to go back, right edge to go forward.
 - **Auto-hide bottom bar** — the bar fades away after 5s of inactivity and returns on touch.
-- **Configurable sources** — if a Movies/Anime mirror rotates or goes down, paste a new home URL in Settings.
+- **Configurable sources** — if a Movies/Anime mirror rotates or goes down, paste a new home URL in Settings; the tab moves there at once.
+
+## What's New in v2.11.0
+
+Fullscreen and PiP rebuilt against the player YouTube actually ships now — and a source set in Settings finally does something.
+
+- **The settings overlay shows in fullscreen.** YouTube's quality/resolution panel is a dialog that sits *next to* the page, not inside the player. The rule that hides the page around the video took it with everything else, so the panel never appeared. Overlays are now recognised, kept, and lifted above the picture.
+- **Rotating back to portrait lines up again.** Leaving fullscreen forced YouTube out of its own fullscreen before the page had actually left it, and the page was never told that the window had changed shape — so it kept the landscape picture. It now leaves fullscreen on its own terms, and the layout is refreshed once the rotation lands.
+- **A new Anime or Movies URL takes effect at once.** The tab used to carry on showing the old site, because it keeps its own WebView for the whole session. Saving a source now moves the tab to that URL, drops the cached copy of the old site, and stops the old one from being resumed on the next start. A source without a scheme gets `https://` so the WebView will load it at all.
+- **PiP shows only the video again.** The page chrome is hidden in the PiP window as it was, and the small window no longer zooms the page out to fit, so the video fills it instead of sitting beside the page layout.
+- **Less churn in the small window.** The player is re-pinned on a timer instead of on every change YouTube makes to the page — which is where the micro-stutter in the PiP audio came from.
 
 ## What's New in v2.10.2
 
@@ -103,7 +113,7 @@ Under the hood, rotate-to-fullscreen no longer fakes it: MyTube taps YouTube's o
 
 Grab the latest signed APK from the **[Releases page](https://github.com/Isaac-1555/MyTube_Android/releases/latest)**.
 
-Direct download: **[MyTube-v2.10.2-release.apk](https://github.com/Isaac-1555/MyTube_Android/releases/download/v2.10.2/MyTube-v2.10.2-release.apk)**
+Direct download: **[MyTube-v2.11.0-release.apk](https://github.com/Isaac-1555/MyTube_Android/releases/download/v2.11.0/MyTube-v2.11.0-release.apk)**
 
 ### Install on Android
 
@@ -116,7 +126,7 @@ Direct download: **[MyTube-v2.10.2-release.apk](https://github.com/Isaac-1555/My
 ### Install with ADB
 
 ```bash
-adb install MyTube-v2.10.2-release.apk
+adb install MyTube-v2.11.0-release.apk
 ```
 
 ### Requirements
@@ -127,7 +137,7 @@ adb install MyTube-v2.10.2-release.apk
 ### Verify the download (optional)
 
 ```bash
-apksigner verify --print-certs MyTube-v2.10.2-release.apk
+apksigner verify --print-certs MyTube-v2.11.0-release.apk
 ```
 
 The release is signed with APK Signature Scheme v2. Certificate SHA-256:
@@ -216,6 +226,19 @@ Then build:
 `keystore.properties`, `*.jks` and `*.keystore` are git-ignored — never commit your signing keys.
 
 ## Changelog
+
+### v2.11.0 — 2026-11-14
+
+- Fix: the quality/resolution sheet never appeared in fullscreen. YouTube's overlay is a dialog that sits next to the page rather than inside the player, and the rule that hides the page around the video took it with everything else. Overlays are now recognised by role, kept, and lifted above the picture
+- Fix: rotating back to portrait left the video hanging off the screen. The teardown forced the custom view down while the page still believed it was fullscreen, and the page was never told that the window had changed shape. The page now leaves fullscreen on its own terms, with a forced fallback, and the layout is refreshed once the rotation lands
+- Fix: a source set in Settings had no effect at all. The tab kept its own WebView for the whole session and carried on showing the old site, and the last visited page won over the configured home. A source now owns the tab: it opens that URL, the cached copy of the old site is dropped, and the old site is no longer resumed on the next start
+- Fix: a source typed without a scheme ("hianimes.se") was loaded as a cleartext address and refused with `ERR_CLEARTEXT_NOT_PERMITTED`. Sources are given an `https://` scheme when they are saved
+- Fix: the PiP window showed the page layout next to the video again, because the unified stylesheet dropped the hide-the-page rule PiP had
+- Fix: PiP zoomed the page out to fit its minimum width, which is how the related-videos sidebar appeared next to the video. The overview mode is off while PiP is on, so the layout viewport is the width of the window and the video fills it
+- Perf: the player is re-pinned on a timer rather than on every mutation of the page, and the page sweep only hides what was just added. The full sweep restores and re-applies `display` on every element it touches, which on a page that rewrites itself several times a second is a lot of style work - and it is audible in the PiP audio
+- Browser: rebuild the fullscreen layer against the player YouTube ships now. The control bar is no longer in `#player-control-overlay`, the container holds both the video and the chrome so the two cannot drift apart, and the video is laid out against the container instead of being offset by YouTube's own left/right insets
+- Browser: the fullscreen button lookup now walks open shadow roots, and the diagnostics report the player model that was actually found rather than the one that was assumed
+- Tests: 17 unit tests over the source-URL precedence
 
 ### v2.10.2 — 2026-10-18
 

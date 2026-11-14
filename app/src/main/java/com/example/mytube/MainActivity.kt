@@ -134,7 +134,7 @@ class MainActivity : ComponentActivity() {
         super.onConfigurationChanged(newConfig)
         // configChanges in the manifest covers orientation, so the Activity is never
         // recreated and this is the only place a rotation becomes visible natively.
-        fullscreenController.reassertIfActive()
+        fullscreenController.onConfigChanged()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -160,7 +160,11 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         browserViewModel.playbackManager.setAppInForeground(true)
-        browserViewModel.webViewManager.setVideoOnlyMode(false)
+        // Not while in PiP: the PiP window is still on screen and the page has to
+        // stay stripped down to the video.
+        if (!isInPictureInPictureMode) {
+            browserViewModel.webViewManager.setVideoOnlyMode(false)
+        }
         browserViewModel.webViewManager.evaluateJs("window.setBackgroundMode && window.setBackgroundMode(false)")
         maybeRequestNotificationPermission()
     }

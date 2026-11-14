@@ -4,66 +4,138 @@
 
     var STYLE_ID = 'mytube-fs';
 
-    // The page chrome is hidden by JS, by display:none on everything outside the
-        // player chain. See hideOutsidePlayer.
-        //
-        // It used to be `body * { visibility: hidden }` plus a re-show of the player
-        // subtree. That cannot work here: YouTube fades its own control bar by setting
-        // visibility:hidden on .player-controls-content/-top/-bottom, so any blanket
-        // `visibility: visible !important` over those elements beats it and the
-        // controls never fade again. display:none on the siblings leaves YouTube's
-        // visibility transitions alone.
-        //
-        // One style element for both fullscreen modes. They used to be separate <style>
-        // blocks and both pinned .html5-video-player with !important, so whichever was
-        // injected last silently won.
-        var CSS = [
+    // Marks the container pinned to the viewport, the ancestors that must not
+    // create a containing block, the boxes between the container and the video,
+    // and the chrome that has to stay on top.
+    var CONTAINER_ATTR = 'data-mytube-container';
+    var ANC_ATTR = 'data-mytube-anc';
+    var FILL_ATTR = 'data-mytube-fill';
+    var KEEP_ATTR = 'data-mytube-keep';
+    var RAISE_ATTR = 'data-mytube-raise';
+    var CHROME_OUT_ATTR = 'data-mytube-chrome-out';
+
+    // The elements the sweep has hidden, with the inline display they had before.
+    window.MyTubeFsHidden = [];
+
+    /**
+     * The player chrome, by every name it has shipped under.
+     *
+     * The mobile web player used to draw its control bar in #player-control-overlay,
+     * a sibling of #movie_player. The current one draws it in #player-control-container
+     * and in custom elements that live under the app tree, outside the player
+     * container entirely, with their content inside a shadow root. A list that only
+     * knows the first of those matches nothing, and the hide-the-page sweep then
+     * takes the control bar - and the quality sheet inside it - with it.
+     */
+    var CHROME_SELECTORS = [
+        '#player-control-overlay',
+        '#player-control-container',
+        'ytm-watch-player-controls',
+        'ytm-custom-control',
+        'player-top-controls',
+        'player-bottom-controls',
+        'player-middle-controls',
+        'player-fullscreen-controls',
+        '.player-controls',
+        '.ytp-chrome-top',
+        '.ytp-chrome-bottom'
+    ];
+
+    // Overlays YouTube opens on top of the player. They are kept out of the sweep
+    // and lifted above the pinned player, because the sweep is what used to
+    // swallow the quality sheet.
+    var OVERLAY_SELECTORS = [
+        '[role="dialog"]',
+        '[role="menu"]',
+        '[role="listbox"]',
+        'bottom-sheet-container',
+        '.ytp-settings-menu',
+        '.player-settings-overlay',
+        '.ytp-popup',
+        'tp-yt-paper-dialog'
+    ];
+
+    // ---------------------------------------------------------------- styles ---
+
+    var CSS = [
         'html.mytube-fs-css, html.mytube-fs-css body { background:#000 !important; overflow:hidden !important; }',
+        'html.mytube-fs-pip, html.mytube-fs-pip body { background:#000 !important; overflow:hidden !important; }',
+
+        // The container holds the video AND the chrome, so pinning it moves both
+        // together. Pinning the video alone left the control bar where it was,
+        // which is what made the picture miss the screen after a rotation.
+        'html.mytube-fs-css [data-mytube-container], html.mytube-fs-pip [data-mytube-container] {',
+        '  position: fixed !important; top: 0 !important; left: 0 !important;',
+        '  right: 0 !important; bottom: 0 !important;',
+        '  width: 100vw !important; height: 100vh !important;',
+        '  max-width: none !important; max-height: none !important;',
+        '  margin: 0 !important; padding: 0 !important; border: 0 !important;',
+        '  background: #000 !important; overflow: hidden !important;',
+        '  z-index: 2147483645 !important;',
+        '  transform: none !important; filter: none !important; contain: none !important;',
+        '  will-change: auto !important; perspective: none !important;',
+        '  backdrop-filter: none !important;',
+        '}',
 
         // position:fixed resolves against the nearest ancestor with a transform,
         // filter, contain or will-change. YouTube puts those on the player
         // container chain, which is why the pin "worked sometimes" before.
-        'html.mytube-fs-css #content, html.mytube-fs-css #primary,',
-        'html.mytube-fs-css #primary-inner, html.mytube-fs-css #player,',
-        'html.mytube-fs-css #player-container-outer, html.mytube-fs-css #below,',
-        'html.mytube-fs-css ytd-watch-flexy, html.mytube-fs-css ytd-player,',
-        'html.mytube-fs-css ytd-player-legacy, html.mytube-fs-css ytd-watch-flexy[is-active] {',
+        'html.mytube-fs-css [data-mytube-anc], html.mytube-fs-pip [data-mytube-anc] {',
         '  transform: none !important; filter: none !important; contain: none !important;',
         '  will-change: auto !important; perspective: none !important;',
         '  backdrop-filter: none !important; content-visibility: visible !important;',
         '}',
 
-        // The player chain has to span the viewport for the overlay below to land in
-        // the right place, and with the rest of the page display:none it no longer has
-        // any flow content giving it height.
-        'html.mytube-fs-css ytd-watch-flexy, html.mytube-fs-css ytd-player,',
-        'html.mytube-fs-css #player-container-outer, html.mytube-fs-css #player-container-inner,',
-        'html.mytube-fs-css #player-container {',
-        '  width: 100% !important; height: 100vh !important; min-height: 0 !important;',
-        '}',
-
-        'html.mytube-fs-css .html5-video-player {',
-        '  position: fixed !important; top: 0 !important; left: 0 !important; right: 0 !important;',
-        '  bottom: 0 !important; width: 100vw !important; height: 100vh !important;',
+        // The boxes between the container and the video must not be positioned,
+        // or the video would be laid out against the wrong one and end up
+        // smaller than the screen - or offset out of it.
+        'html.mytube-fs-css [data-mytube-fill], html.mytube-fs-pip [data-mytube-fill] {',
+        '  position: static !important; width: 100% !important; height: 100% !important;',
         '  max-width: none !important; max-height: none !important;',
-        '  margin: 0 !important; background: #000 !important;',
-        // One below the control overlay below. #movie_player owns the video surface
-        // and a full-bleed .ytp-player-content inside it, so at an equal or higher
-        // z-index it paints over the controls and eats every tap meant for them.
-        '  z-index: 2147483646 !important;',
+        '  margin: 0 !important; padding: 0 !important;',
         '}',
 
-        // The mobile-web player draws its real control bar - seek bar, play button,
-        // fullscreen button - in #player-control-overlay, a sibling of #movie_player.
-        // z-index only: no visibility, so YouTube's own show/hide of the controls is
-        // left alone.
-        'html.mytube-fs-css #player-control-overlay { z-index: 2147483647 !important; }',
+        // The video fills the container.
+        'html.mytube-fs-css [data-mytube-container] .html5-video-player,',
+        'html.mytube-fs-pip [data-mytube-container] .html5-video-player {',
+        '  position: absolute !important; top: 0 !important; left: 0 !important;',
+        '  right: 0 !important; bottom: 0 !important;',
+        '  width: 100% !important; height: 100% !important;',
+        '  max-width: none !important; max-height: none !important;',
+        '  margin: 0 !important; background: #000 !important; z-index: auto !important;',
+        '}',
+        'html.mytube-fs-css [data-mytube-container] .html5-video-container,',
+        'html.mytube-fs-pip [data-mytube-container] .html5-video-container {',
+        '  position: absolute !important; top: 0 !important; left: 0 !important;',
+        '  right: 0 !important; bottom: 0 !important;',
+        '  width: 100% !important; height: 100% !important;',
+        '}',
+        // YouTube offsets the video inside its box - left: 85px on a 400px wide
+        // player. The offsets have to go, or the picture is cut off on one side
+        // and does not fill the screen.
+        'html.mytube-fs-css [data-mytube-container] video,',
+        'html.mytube-fs-pip [data-mytube-container] video {',
+        '  position: absolute !important; top: 0 !important; left: 0 !important;',
+        '  right: 0 !important; bottom: 0 !important;',
+        '  width: 100% !important; height: 100% !important; object-fit: contain !important;',
+        '}',
 
-        'html.mytube-fs-pip, html.mytube-fs-pip body { background:#000 !important; overflow:hidden !important; }',
-        'html.mytube-fs-pip .html5-video-player {',
+        // Chrome sits above the video. It has to be positioned for the z-index
+        // to mean anything, and YouTube draws it unpositioned.
+        'html.mytube-fs-css [data-mytube-raise], html.mytube-fs-pip [data-mytube-raise] {',
+        '  position: relative !important; z-index: 2147483647 !important;',
+        '}',
+        'html.mytube-fs-css [data-mytube-keep], html.mytube-fs-pip [data-mytube-keep] {',
+        '  z-index: 2147483647 !important;',
+        '}',
+        // Chrome that lives outside the container is pinned over the video, so it
+        // must not swallow the taps meant for it.
+        'html.mytube-fs-css [data-mytube-chrome-out], html.mytube-fs-pip [data-mytube-chrome-out] {',
         '  position: fixed !important; top: 0 !important; left: 0 !important;',
-        '  width: 100vw !important; height: 100vh !important; max-height: none !important;',
-        '  margin: 0 !important; z-index: 2147483647 !important; background: #000 !important;',
+        '  right: 0 !important; bottom: 0 !important;',
+        '  width: 100vw !important; height: 100vh !important;',
+        '  pointer-events: none !important;',
+        '  z-index: 2147483647 !important;',
         '}'
     ].join('');
 
@@ -89,17 +161,438 @@
         }
     }
 
+    // ------------------------------------------------------------ player model ---
 
-    // Located by label rather than by class: the desktop player's
-    // .ytp-fullscreen-button does not exist on the mobile-web player, which ships
-    // an unprefixed "icon-button fullscreen-icon" instead. Any attempt to name it
-    // by class has matched nothing.
-    function findFsButtons() {
-        return [].slice.call(document.querySelectorAll(
-            '[aria-label*="full screen" i],[aria-label*="fullscreen" i],' +
-            '[title*="full screen" i],[title*="fullscreen" i]'
-        ));
+    function firstMatch(sel) {
+        try { return document.querySelector(sel); } catch (e) { return null; }
     }
+
+    function allMatch(sel) {
+        var root = (this && this.querySelectorAll) ? this : document;
+        try { return Array.prototype.slice.call(root.querySelectorAll(sel)); } catch (e) { return []; }
+    }
+
+    // The overlays YouTube has opened. They are kept out of the sweep and
+    // lifted above the pinned player.
+    var extraKeep = [];
+
+    /**
+     * One combined selector each, so a mutation costs one query and not a dozen.
+     */
+    var CHROME_SELECTOR = CHROME_SELECTORS.join(',');
+    var OVERLAY_SELECTOR = OVERLAY_SELECTORS.join(',');
+
+    function chromeHosts() {
+        return allMatch(CHROME_SELECTOR);
+    }
+
+    function playerEl() {
+        var p = firstMatch('.html5-video-player');
+        if (p) return p;
+        var v = firstMatch('video');
+        if (v && v.closest) return v.closest('.html5-video-player');
+        return null;
+    }
+
+    function containsChrome(node, chrome) {
+        for (var i = 0; i < chrome.length; i++) {
+            if (node.contains(chrome[i])) return true;
+        }
+        return false;
+    }
+
+    /**
+     * The container is the outermost ancestor of the player that also holds the
+     * chrome. Pinning it moves the video and the control bar together, which is
+     * the only way they stay lined up.
+     */
+    function containerFor(player, chrome) {
+        if (!player) return null;
+        var node = player;
+        var best = null;
+        while (node && node !== document.body) {
+            if (containsChrome(node, chrome)) best = node;
+            node = node.parentElement;
+        }
+        return best || firstMatch('#player-container-id') || firstMatch('#player') || player;
+    }
+
+    function model() {
+        var player = playerEl();
+        var chrome = chromeHosts();
+        var container = containerFor(player, chrome);
+        var keep = [];
+        if (container) keep.push(container);
+        chrome.forEach(function (c) {
+            if (keep.indexOf(c) === -1) keep.push(c);
+        });
+        // Overlays that YouTube has opened are kept too, or the sweep would take
+        // them away again the moment the page adds one.
+        extraKeep.forEach(function (e) {
+            if (keep.indexOf(e) === -1) keep.push(e);
+        });
+        return { player: player, container: container, chrome: chrome, keep: keep };
+    }
+
+    /**
+     * The boxes between the container and the video. They are made static and
+     * full size so that the video is laid out against the container and not
+     * against whichever one of them happens to be positioned.
+     */
+    function fillChain(player, container) {
+        var chain = [];
+        if (!player || !container) return chain;
+        var node = player.parentElement;
+        while (node && node !== container && node !== document.body && node !== document.documentElement) {
+            chain.push(node);
+            node = node.parentElement;
+        }
+        return chain;
+    }
+
+    // -------------------------------------------------------------- the sweep ---
+
+    /**
+     * Hides everything that is not the player and its chrome.
+     *
+     * Hiding by position in the tree rather than by a list of selectors is what
+     * makes this survive YouTube redesigns: it does not care what the masthead is
+     * called, or how many of them there are.
+     *
+     * Only the ancestors of the kept elements are swept. The kept elements
+     * themselves are left alone, because the sweep starts at the video element in
+     * the current player - and the element that holds the video is its child, so
+     * hiding that child hid the video with it.
+     *
+     * display:none rather than visibility:hidden because YouTube fades its own
+     * control bar with visibility, and a blanket `visibility: visible !important`
+     * over the player subtree defeats that outright - which is exactly how the
+     * controls ended up never fading.
+     */
+    function sweepAll(keep, container) {
+        restoreHidden();
+        if (!document.body || !keep.length) return;
+
+        keep.forEach(function (root) {
+            var chain = ancestorChain(root);
+            for (var i = 1; i < chain.length; i++) {
+                var node = chain[i];
+                // Nothing inside the container is swept. That is the player area,
+                // and it holds the things the player itself raises - the end
+                // screen, the settings sheet - and hiding them takes the
+                // player's own UI with them.
+                if (container && node === container) break;
+                var onPath = chain[i - 1];
+                var kids = node.children;
+                for (var j = 0; j < kids.length; j++) {
+                    var child = kids[j];
+                    if (child === onPath) continue;
+                    if (isKeepish(child, keep)) continue;
+                    if (isSkippable(child)) continue;
+                    hide(child);
+                }
+            }
+        });
+    }
+
+    /**
+     * Hides what was just added outside the player.
+     *
+     * The full sweep restores and re-applies display on every element it touches,
+     * which on a page that rewrites itself several times a second is a lot of
+     * style work for nothing - and it is audible in the PiP audio. The sweep
+     * establishes the invariant once; this keeps it true as the page changes.
+     */
+    function hideAdded(nodes, keep) {
+        if (!nodes) return;
+        for (var i = 0; i < nodes.length; i++) {
+            var n = nodes[i];
+            if (n.nodeType !== 1) continue;
+            if (isKeepish(n, keep)) continue;
+            if (isSkippable(n)) continue;
+            hide(n);
+            // The new node may carry children of its own.
+            var kids = n.children;
+            for (var j = 0; j < kids.length; j++) {
+                if (isKeepish(kids[j], keep)) continue;
+                hide(kids[j]);
+            }
+        }
+    }
+
+    function ancestorChain(el) {
+        var chain = [];
+        var node = el;
+        while (node && node !== document.body && node !== document.documentElement) {
+            chain.push(node);
+            node = node.parentElement;
+        }
+        if (document.body) chain.push(document.body);
+        return chain;
+    }
+
+    function isKeepish(el, keep) {
+        for (var i = 0; i < keep.length; i++) {
+            if (el === keep[i] || el.contains(keep[i])) return true;
+        }
+        return false;
+    }
+
+    function isSkippable(el) {
+        var tag = el.tagName;
+        return tag === 'SCRIPT' || tag === 'STYLE' || tag === 'LINK' || tag === 'TEMPLATE';
+    }
+
+    function hide(el) {
+        if (isHiddenByUs(el)) return;
+        window.MyTubeFsHidden.push([
+            el,
+            el.style.getPropertyValue('display'),
+            el.style.getPropertyPriority('display')
+        ]);
+        el.style.setProperty('display', 'none', 'important');
+    }
+
+    function restoreHidden() {
+        var list = window.MyTubeFsHidden || [];
+        for (var i = 0; i < list.length; i++) {
+            var e = list[i];
+            if (!e[0]) continue;
+            if (e[2]) e[0].style.setProperty('display', e[1], e[2]);
+            else e[0].style.display = e[1];
+        }
+        window.MyTubeFsHidden = [];
+    }
+
+    function isHiddenByUs(el) {
+        var list = window.MyTubeFsHidden || [];
+        for (var i = 0; i < list.length; i++) if (list[i][0] === el) return true;
+        return false;
+    }
+
+    // ------------------------------------------------------------- overlays ---
+
+    /**
+     * Keeps YouTube's own overlays - the quality sheet above all - alive.
+     *
+     * The sweep hides everything around the player, and the quality sheet is
+     * part of that: it lives in the player's own full-screen host, next to the
+     * page, not inside the player. Hiding it is what made the settings overlay
+     * never appear, and it is also why the panel could not be reached in
+     * fullscreen.
+     *
+     * An overlay is recognised by its role, and it is only kept once YouTube has
+     * actually opened it: a container carrying the `hidden` attribute is still
+     * closed and must stay out of the way.
+     */
+    function keepOverlays() {
+        var cands = allMatch(OVERLAY_SELECTOR);
+        var m = model();
+        var needSweep = false;
+        for (var i = 0; i < cands.length; i++) {
+            var el = cands[i];
+            if (el.hasAttribute('hidden')) continue;
+            if (el.getAttribute('aria-hidden') === 'true') continue;
+
+            // An overlay that the sweep took with it has to be put back, and so
+            // do the elements it lives in.
+            if (isHiddenByUs(el) || hasHiddenAncestor(el)) {
+                if (extraKeep.indexOf(el) === -1) {
+                    extraKeep.push(el);
+                    needSweep = true;
+                }
+            }
+
+            // The pinned player covers the viewport and the sheet has to be
+            // painted over it, so every positioned box it sits in is raised.
+            raiseChain(el);
+        }
+        if (needSweep) sweepAll(m.keep.concat(extraKeep), m.container);
+    }
+
+    function hasHiddenAncestor(el) {
+        var anc = el.parentElement;
+        while (anc && anc !== document.body) {
+            if (isHiddenByUs(anc)) return true;
+            anc = anc.parentElement;
+        }
+        return false;
+    }
+
+    function raiseChain(el) {
+        el.style.setProperty('z-index', '2147483647', 'important');
+        var n = el.parentElement;
+        while (n && n !== document.body) {
+            var cs = getComputedStyle(n);
+            if (cs.position !== 'static') {
+                n.style.setProperty('z-index', '2147483647', 'important');
+            }
+            n = n.parentElement;
+        }
+    }
+
+    // --------------------------------------------------------------- pinning ---
+
+    function clearPins() {
+        var marked = document.querySelectorAll(
+            '[' + CONTAINER_ATTR + '],[' + ANC_ATTR + '],[' + FILL_ATTR + '],' +
+            '[' + KEEP_ATTR + '],[' + RAISE_ATTR + '],[' + CHROME_OUT_ATTR + ']'
+        );
+        for (var i = 0; i < marked.length; i++) {
+            marked[i].removeAttribute(CONTAINER_ATTR);
+            marked[i].removeAttribute(ANC_ATTR);
+            marked[i].removeAttribute(FILL_ATTR);
+            marked[i].removeAttribute(KEEP_ATTR);
+            marked[i].removeAttribute(RAISE_ATTR);
+            marked[i].removeAttribute(CHROME_OUT_ATTR);
+        }
+    }
+
+    function markAncestors(el) {
+        var anc = el.parentElement;
+        while (anc && anc !== document.documentElement) {
+            anc.setAttribute(ANC_ATTR, '1');
+            anc = anc.parentElement;
+        }
+    }
+
+    /** The player and container the pins are on, so a rebuild can be noticed. */
+    var lastPlayer = null;
+    var lastContainer = null;
+    var lastChrome = [];
+
+    function applyModel(force) {
+        var m = model();
+        if (!m.container) return false;
+
+        var chromeChanged = m.chrome.length !== lastChrome.length ||
+            (m.chrome.length && m.chrome[0] !== lastChrome[0]);
+        var changed = force ||
+            chromeChanged ||
+            m.player !== lastPlayer ||
+            m.container !== lastContainer;
+        lastPlayer = m.player;
+        lastContainer = m.container;
+        lastChrome = m.chrome;
+
+        m.container.setAttribute(CONTAINER_ATTR, '1');
+        markAncestors(m.container);
+
+        // Everything between the container and the video becomes static and full
+        // size, so the video is laid out against the container.
+        fillChain(m.player, m.container).forEach(function (el) {
+            el.setAttribute(FILL_ATTR, '1');
+        });
+
+        if (changed) {
+            m.chrome.forEach(function (c) {
+                if (m.container.contains(c)) {
+                    // Inside the container: it moves with the video already. It only
+                    // has to end up above it, which needs a z-index, which needs it
+                    // to be positioned.
+                    c.setAttribute(KEEP_ATTR, '1');
+                    if (getComputedStyle(c).position === 'static') c.setAttribute(RAISE_ATTR, '1');
+                } else {
+                    // Outside the container: pinned over the video. It must not
+                    // swallow the taps meant for the video.
+                    c.setAttribute(CHROME_OUT_ATTR, '1');
+                    c.setAttribute(KEEP_ATTR, '1');
+                    markAncestors(c);
+                }
+            });
+
+            // A rebuilt player means the page moved things around: sweep again.
+            sweepAll(m.keep, m.container);
+
+            // The poster sits on top of the video until playback starts. Hidden
+            // after the sweep, because the sweep rebuilds the registry and would
+            // undo it.
+            var poster = firstMatch('#player-thumbnail-overlay');
+            if (poster && !isKeepish(poster, m.keep)) hide(poster);
+        }
+
+        keepOverlays();
+        return true;
+    }
+
+    // ------------------------------------------------------------- reporting ---
+
+    function isFsActive() {
+        return !!(window.MyTubeFsCssOn || window.MyTubePipOn);
+    }
+
+    function reassert() {
+        if (!isFsActive()) return;
+        var root = document.documentElement;
+        if (!root) return;
+        var want = window.MyTubeFsCssOn ? 'mytube-fs-css' : 'mytube-fs-pip';
+        var other = window.MyTubeFsCssOn ? 'mytube-fs-pip' : 'mytube-fs-css';
+        styleEl();
+        root.classList.add(want);
+        root.classList.remove(other);
+        applyModel(true);
+        if (window.MyTubeFsCssOn) verify('reassert', true);
+    }
+
+    /**
+     * What the PiP window is actually doing, for the audio stutter.
+     *
+     * Dropped frames are the number that says whether the renderer is keeping up
+     * in the small window, and the rectangle says whether the video is filling it
+     * or sitting in a corner of a wider page.
+     */
+    var pipDiagLast = 0;
+    function pipDiag() {
+        if (!window.MyTubePipOn) return;
+        var now = Date.now();
+        if (now - pipDiagLast < 2000) return;
+        pipDiagLast = now;
+        try {
+            var v = document.querySelector('video');
+            if (!v) return;
+            var q = v.getVideoPlaybackQuality ? v.getVideoPlaybackQuality() : null;
+            var r = v.getBoundingClientRect();
+            var msg = 'PIP dropped=' + (q ? q.droppedVideoFrames : '?') +
+                '/' + (q ? q.totalVideoFrames : '?') +
+                ' rect=' + [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)].join(',') +
+                ' vp=' + window.innerWidth + 'x' + window.innerHeight +
+                ' scale=' + (window.visualViewport ? window.visualViewport.scale : '?') +
+                ' paused=' + v.paused;
+            if (window.Android && window.Android.onFullscreenCssAudit) {
+                window.Android.onFullscreenCssAudit(msg);
+            }
+        } catch (e) {}
+    }
+
+    function startObserver() {
+        if (window.MyTubeFsObserver) return;
+        window.MyTubeFsObserver = new MutationObserver(function (records) {
+            if (!isFsActive()) return;
+            var added = [];
+            for (var i = 0; i < records.length; i++) {
+                var r = records[i];
+                if (r.type !== 'childList') continue;
+                for (var j = 0; j < r.addedNodes.length; j++) added.push(r.addedNodes[j]);
+            }
+            var m = model();
+            // Hide what was added outside the player. The full sweep is not run
+            // again here: it restores and re-applies display on every element it
+            // touches, and a page that rewrites itself several times a second
+            // would pay for that over and over - which is audible in the PiP audio.
+            hideAdded(added, m.keep);
+            applyModel(false);
+            pipDiag();
+        });
+        window.MyTubeFsObserver.observe(document.documentElement, {
+            childList: true, subtree: true
+        });
+    }
+
+    // The observer keeps the page stripped and the player's own overlays alive
+    // while it is fullscreen. It is started once the document is there.
+    if (document.documentElement) startObserver();
+
+    // ------------------------------------------------------- fullscreen entry ---
 
     /**
      * Turns the next trusted touch into YouTube entering its own fullscreen.
@@ -112,9 +605,9 @@
      * gate.
      *
      * The click is dispatched straight at the button rather than left to hit
-     * testing, because #movie_player is pinned over #player-control-overlay and
-     * would otherwise swallow it. One-shot, and it suppresses the native click so
-     * the button is not activated twice.
+     * testing, because the player is pinned over the control surface and would
+     * otherwise swallow it. One-shot, and it suppresses the native click so the
+     * button is not activated twice.
      */
     window.MyTubeFsArmPromote = function() {
         if (document.fullscreenElement) return 'already-fullscreen';
@@ -174,9 +667,6 @@
             host.classList.remove('ytp-autohide');
         }
 
-        // Located by label rather than by class: the desktop player's
-        // .ytp-fullscreen-button does not exist on the mobile-web player, which ships
-        // an unprefixed "icon-button fullscreen-icon" instead.
         var nodes = findFsButtons();
         var out = [];
         var pick = null;
@@ -231,6 +721,51 @@
         };
     };
 
+    /**
+     * Located by label rather than by class: the desktop player's
+     * .ytp-fullscreen-button does not exist on the mobile-web player, which ships
+     * an unprefixed "icon-button fullscreen-icon" instead. Any attempt to name it
+     * by class has matched nothing.
+     *
+     * Open shadow roots are searched too, because the current player draws its
+     * chrome in one. A closed shadow root is unreachable and the button simply is
+     * not found - in that case the app stays on the CSS path, which is a working
+     * fullscreen rather than a broken one.
+     */
+    function findFsButtons() {
+        var sel = '[aria-label*="full screen" i],[aria-label*="fullscreen" i],' +
+                  '[title*="full screen" i],[title*="fullscreen" i]';
+        return deepQuery(document, sel);
+    }
+
+    function deepQuery(root, sel) {
+        var found = allMatch.call(root, sel);
+        var all = allMatch.call(root, '*');
+        for (var i = 0; i < all.length; i++) {
+            if (all[i].shadowRoot) found = found.concat(deepQuery(all[i].shadowRoot, sel));
+        }
+        return found;
+    }
+
+    /**
+     * First ancestor that would stop the tap reaching [el].
+     */
+    function blocker(el) {
+        var p = el;
+        while (p && p !== document.documentElement) {
+            var s = getComputedStyle(p);
+            if (s.visibility === 'hidden' || s.display === 'none' || s.pointerEvents === 'none') {
+                var id = p.id ? '#' + p.id
+                    : (typeof p.className === 'string' && p.className
+                        ? '.' + p.className.split(/\s+/)[0]
+                        : p.tagName.toLowerCase());
+                return id + ' ' + s.visibility + '/' + s.display + '/' + s.pointerEvents;
+            }
+            p = p.parentElement;
+        }
+        return '';
+    }
+
     function hitStack(x, y, target) {
         var stack = document.elementsFromPoint(Math.round(x), Math.round(y)) || [];
         var out = [];
@@ -267,6 +802,16 @@
         }
     }
 
+    function restoreHitTestable() {
+        var l = window.MyTubeFsForced || [];
+        for (var i = 0; i < l.length; i++) {
+            var e = l[i];
+            if (e[3]) e[0].style.setProperty(e[1], e[2], e[3]);
+            else e[0].style[e[1]] = e[2];
+        }
+        window.MyTubeFsForced = [];
+    }
+
     /**
      * What the player's control surface actually looks like right now. Written
      * because the mobile-web chrome is reached through four different class name
@@ -286,15 +831,16 @@
                 ',rect:' + Math.round(r.left) + ',' + Math.round(r.top) + ',' +
                 Math.round(r.width) + 'x' + Math.round(r.height) + '}');
         }
-        ['#movie_player', '#player-control-overlay', '.player-controls-content',
-         '.player-controls-top', '.player-controls-bottom', '.player-controls-bottom-left',
-         '.player-controls-bottom-right', '.ytp-large-mode-buttons',
-         '.ytp-chrome-bottom', '.ytp-chrome-top', '.ytp-progress-bar'
+        ['#movie_player', '#player-control-overlay', '#player-control-container',
+         '#player-container-id', 'ytm-watch-player-controls',
+         '.player-controls-content', '.player-controls-top', '.player-controls-bottom',
+         '.ytp-large-mode-buttons', '.ytp-chrome-bottom', '.ytp-chrome-top',
+         '.ytp-progress-bar'
         ].forEach(row);
         // Whatever YouTube happens to be calling its seek bar and lock button this week.
-        var probe = ['seek', 'scrub', 'progress', 'lock', 'timeline'];
+        var probe = ['seek', 'scrub', 'progress', 'lock', 'timeline', 'quality', 'setting'];
         var found = {};
-        var all = document.querySelectorAll('#player-control-overlay *, #movie_player *');
+        var all = document.querySelectorAll('#movie_player *, #player-control-container *, #player-control-overlay *');
         for (var i = 0; i < all.length && i < 4000; i++) {
             var cn = typeof all[i].className === 'string' ? all[i].className : '';
             probe.forEach(function(k) {
@@ -353,33 +899,6 @@
         return true;
     };
 
-    function restoreHitTestable() {
-        var l = window.MyTubeFsForced || [];
-        for (var i = 0; i < l.length; i++) {
-            var e = l[i];
-            if (e[3]) e[0].style.setProperty(e[1], e[2], e[3]);
-            else e[0].style[e[1]] = e[2];
-        }
-        window.MyTubeFsForced = [];
-    }
-
-    /** First ancestor that would stop the tap reaching [el]. */
-    function blocker(el) {
-        var p = el;
-        while (p && p !== document.documentElement) {
-            var s = getComputedStyle(p);
-            if (s.visibility === 'hidden' || s.display === 'none' || s.pointerEvents === 'none') {
-                var id = p.id ? '#' + p.id
-                    : (typeof p.className === 'string' && p.className
-                        ? '.' + p.className.split(/\s+/)[0]
-                        : p.tagName.toLowerCase());
-                return id + ' ' + s.visibility + '/' + s.display + '/' + s.pointerEvents;
-            }
-            p = p.parentElement;
-        }
-        return '';
-    }
-
     /**
      * What the player actually contains. Diagnostic only, but guessing at YouTube's
      * control markup is how the previous selector list ended up matching nothing.
@@ -422,7 +941,8 @@
         return false;
     };
 
-    // ---- verification ---------------------------------------------------------
+    // ------------------------------------------------------------ verification ---
+
     // Did the pin actually take? Reported back so device logs carry hard data
     // instead of guesses. Called on apply and again after the page settles, because
     // a late relayout can undo the pin.
@@ -433,6 +953,30 @@
         if (!r || r.width < 1 || r.height < 1) return false;
         var covered = Math.min(r.width, window.innerWidth) * Math.min(r.height, window.innerHeight);
         return covered / (window.innerWidth * window.innerHeight) > 0.9;
+    };
+
+    /**
+     * Describes the discovered player model, so a device log says what the page
+     * actually looks like instead of what the app assumed.
+     */
+    window.MyTubeFsModel = function() {
+        var m = model();
+        var v = document.querySelector('video');
+        var vr = v ? v.getBoundingClientRect() : null;
+        var playerRect = m.player ? m.player.getBoundingClientRect() : null;
+        var containerRect = m.container ? m.container.getBoundingClientRect() : null;
+        return {
+            player: m.player ? (m.player.id || m.player.className) : null,
+            container: m.container ? (m.container.id || m.container.className || m.container.tagName) : null,
+            chrome: m.chrome.map(function (c) { return c.tagName + '#' + (c.id || ''); }).join(','),
+            hidden: (window.MyTubeFsHidden || []).length,
+            video: vr ? [Math.round(vr.left), Math.round(vr.top), Math.round(vr.width), Math.round(vr.height)] : null,
+            playerRect: playerRect ? [Math.round(playerRect.left), Math.round(playerRect.top), Math.round(playerRect.width), Math.round(playerRect.height)] : null,
+            containerRect: containerRect ? [Math.round(containerRect.left), Math.round(containerRect.top), Math.round(containerRect.width), Math.round(containerRect.height)] : null,
+            viewport: [window.innerWidth, window.innerHeight],
+            visual: window.visualViewport ? [Math.round(window.visualViewport.width), Math.round(window.visualViewport.height), window.visualViewport.scale] : null,
+            fsButton: findFsButtons().length
+        };
     };
 
     // Names whatever is painted on top of the player, at points where chrome lives.
@@ -486,8 +1030,8 @@
 
     window.MyTubeSetFsCss = function(on) {
         on = !!on;
-        // The stylesheet hides everything that is not the player, so if the player is
-        // not in the DOM yet this would paint the page black. Wait for it instead.
+        // The stylesheet hides everything that is not the player, so if the player
+        // is not in the DOM yet this would paint the page black. Wait for it instead.
         if (on && !document.querySelector('.html5-video-player')) {
             Logless('defer: no .html5-video-player yet');
             return;
@@ -497,20 +1041,74 @@
             return;
         }
         window.MyTubeFsCssOn = on;
-        toggleClass('mytube-fs-css', on);
-        if (on) {
-            reassert();
-            verify('immediate', true);
-            // YouTube re-lays-out for a while after a rotation, so verify late too.
-            setTimeout(function() { if (window.MyTubeFsCssOn) { reassert(); verify('300ms', true); } }, 300);
-            setTimeout(function() { if (window.MyTubeFsCssOn) { reassert(); verify('900ms', true); } }, 900);
-        } else {
-            restoreHiddenOutside();
+        if (!on) {
+            toggleClass('mytube-fs-css', false);
+            if (!window.MyTubePipOn) teardown();
             verify('off');
+            return;
+        }
+        window.MyTubePipOn = false;
+        toggleClass('mytube-fs-pip', false);
+        toggleClass('mytube-fs-css', true);
+        reassert();
+        verify('immediate', true);
+        // YouTube re-lays-out for a while after a rotation, so verify late too.
+        setTimeout(function() { if (window.MyTubeFsCssOn) { reassert(); verify('300ms', true); } }, 300);
+        setTimeout(function() { if (window.MyTubeFsCssOn) { reassert(); verify('900ms', true); } }, 900);
+    };
+
+    window.MyTubeSetPipMode = function(on) {
+        on = !!on;
+        if (window.MyTubePipOn === on) {
+            if (on) reassert();
+            return;
+        }
+        window.MyTubePipOn = on;
+        if (on) {
+            window.MyTubeFsCssOn = false;
+            toggleClass('mytube-fs-css', false);
+            toggleClass('mytube-fs-pip', true);
+            reassert();
+            // The window changes size on the way into PiP and again on the way out.
+            // Re-asserting after it settles is what keeps the player filling it.
+            setTimeout(function() { if (window.MyTubePipOn) reassert(); }, 250);
+            setTimeout(function() { if (window.MyTubePipOn) reassert(); }, 900);
+        } else {
+            toggleClass('mytube-fs-pip', false);
+            if (!window.MyTubeFsCssOn) teardown();
         }
     };
 
-    window.MyTubeSetPipMode = function(on) { toggleClass('mytube-fs-pip', !!on); };
+    /** Puts the page back the way it was: no pins, nothing hidden. */
+    function teardown() {
+        clearPins();
+        restoreHidden();
+        extraKeep = [];
+        var overlays = document.querySelectorAll(OVERLAY_SELECTOR);
+        for (var i = 0; i < overlays.length; i++) {
+            overlays[i].style.removeProperty('z-index');
+        }
+    }
+
+    /**
+     * Forces the layout to be recomputed after the window changed shape.
+     *
+     * Chromium does not always re-layout the page when the WebView is resized,
+     * and a page that still believes it is in landscape keeps the landscape
+     * picture after a rotation back to portrait. A synthetic resize event is the
+     * one thing the page listens to for exactly this.
+     */
+    window.MyTubeFsRefresh = function() {
+        try {
+            window.dispatchEvent(new Event('resize'));
+        } catch (e) {}
+        try {
+            var vv = window.visualViewport;
+            if (vv && vv.dispatchEvent) vv.dispatchEvent(new Event('resize'));
+        } catch (e) {}
+        reassert();
+        return true;
+    };
 
     function Logless(msg) {
         try {
@@ -520,94 +1118,8 @@
         } catch (e) {}
     }
 
-    function reassert() {
-        if (!window.MyTubeFsCssOn) return;
-        var root = document.documentElement;
-        if (root && !root.classList.contains('mytube-fs-css')) {
-            styleEl();
-            root.classList.add('mytube-fs-css');
-        }
-        hideOutsidePlayer();
-    }
+    // ------------------------------------------------------------ video state ---
 
-    /**
-     * Hides everything that is not the player, by display:none on the siblings of the
-     * player chain.
-     *
-     * Hiding by position in the tree rather than by a list of selectors is what makes
-     * this survive YouTube redesigns: it does not care what the masthead is called, or
-     * how many of them there are. display:none rather than visibility:hidden because
-     * YouTube fades its own control bar with visibility, and a blanket
-     * `visibility: visible !important` over the player subtree defeats that outright -
-     * which is exactly how the controls ended up never fading.
-     */
-    function hideOutsidePlayer() {
-        restoreHiddenOutside();
-        var roots = [];
-        ['#player-control-overlay', '#movie_player'].forEach(function(sel) {
-            var e = document.querySelector(sel);
-            if (e) roots.push(e);
-        });
-        if (!roots.length || !document.body) return;
-
-        var node = lowestCommonAncestor(roots);
-        while (node && node !== document.body && node.parentElement) {
-            var kids = node.children;
-            for (var i = 0; i < kids.length; i++) {
-                var child = kids[i];
-                if (isOnChain(child, roots)) continue;
-                window.MyTubeFsHidden.push([
-                    child,
-                    child.style.getPropertyValue('display'),
-                    child.style.getPropertyPriority('display')
-                ]);
-                child.style.setProperty('display', 'none', 'important');
-            }
-            node = node.parentElement;
-        }
-    }
-
-    function isOnChain(el, roots) {
-        for (var i = 0; i < roots.length; i++) {
-            if (el === roots[i] || el.contains(roots[i])) return true;
-        }
-        return false;
-    }
-
-    function lowestCommonAncestor(nodes) {
-        var lca = nodes[0];
-        for (var i = 1; i < nodes.length; i++) {
-            var a = lca, b = nodes[i];
-            while (a && a !== b) {
-                if (!a.contains(b)) a = a.parentElement;
-                else b = b.parentElement;
-            }
-            if (a) lca = a;
-        }
-        return lca;
-    }
-
-    function restoreHiddenOutside() {
-        var list = window.MyTubeFsHidden || [];
-        for (var i = 0; i < list.length; i++) {
-            if (list[i][2]) list[i][0].style.setProperty('display', list[i][1], list[i][2]);
-            else list[i][0].style.display = list[i][1];
-        }
-        window.MyTubeFsHidden = [];
-    }
-
-    // YouTube re-renders the player constantly (quality changes, ad hand-off,
-    // navigation). A one-shot class add gets wiped; keep it pinned while active.
-    function startObserver() {
-        if (window.MyTubeFsObserver) return;
-        window.MyTubeFsObserver = new MutationObserver(function() { reassert(); });
-        window.MyTubeFsObserver.observe(document.documentElement, {
-            childList: true, subtree: true
-        });
-    }
-    if (document.documentElement) startObserver();
-
-    // ---- video state reporting ------------------------------------------------
     function isWatchPage() {
         if (!/(^|\.)youtube\.com$/.test(location.hostname)) return false;
         var p = location.pathname;
