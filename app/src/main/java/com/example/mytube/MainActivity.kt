@@ -8,6 +8,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.util.Rational
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
@@ -28,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModelProvider
+import com.example.mytube.browser.BrowserMode
 import com.example.mytube.browser.VideoFullscreenController
 import com.example.mytube.ui.BrowserScreen
 import com.example.mytube.ui.SettingsSheet
@@ -184,6 +186,24 @@ class MainActivity : ComponentActivity() {
             )
         }
         browserViewModel.webViewManager.setVideoOnlyMode(isInPictureInPictureMode)
+        logPageState(if (isInPictureInPictureMode) "pip-in" else "pip-out")
+    }
+
+    /**
+     * Reports what the page has been told to do, so a device log shows whether a
+     * mode was left behind.
+     *
+     * A mode that is left on is what makes the page behave strangely much later:
+     * the stylesheet stays on, the pins stay on, and the controls stay out of
+     * reach.
+     */
+    private fun logPageState(tag: String) {
+        browserViewModel.webViewManager.evaluateJsInFromMainThread(
+            BrowserMode.YOUTUBE,
+            "window.MyTubeFsState && window.MyTubeFsState()"
+        ) { raw ->
+            Log.d("MyTubeState", "page[$tag] $raw")
+        }
     }
 
     override fun onResume() {

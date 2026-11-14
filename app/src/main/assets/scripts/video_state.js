@@ -134,14 +134,30 @@
         'html.mytube-fs-css [data-mytube-keep], html.mytube-fs-pip [data-mytube-keep] {',
         '  z-index: 2147483647 !important;',
         '}',
-        // Chrome that lives outside the container is pinned over the video, so it
-        // must not swallow the taps meant for it.
+        // Chrome that lives outside the container is pinned over the video.
+        //
+        // The host is stretched over the whole window, so the host itself stays
+        // transparent to touches - otherwise it swallows every tap meant for the
+        // video. Its own children get their hit-testing back, so the gear, the
+        // seek bar and the settings sheet work again: a tap on the gear used to
+        // fall through to the video and came out as a play/pause.
         'html.mytube-fs-css [data-mytube-chrome-out], html.mytube-fs-pip [data-mytube-chrome-out] {',
         '  position: fixed !important; top: 0 !important; left: 0 !important;',
         '  right: 0 !important; bottom: 0 !important;',
         '  width: 100vw !important; height: 100vh !important;',
         '  pointer-events: none !important;',
         '  z-index: 2147483647 !important;',
+        '}',
+        // The control strips themselves are hit-testable again.
+        //
+        // :where() keeps the rule at zero specificity, so it only fills the gap
+        // where YouTube says nothing: a control YouTube has deliberately made
+        // untappable - a hidden one, a disabled one - stays untappable, and the
+        // shadow content inside a strip comes back with it, because
+        // pointer-events is inherited.
+        ':where(html.mytube-fs-css) :where([data-mytube-chrome-out] > *),',
+        ':where(html.mytube-fs-pip) :where([data-mytube-chrome-out] > *) {',
+        '  pointer-events: auto;',
         '}'
     ].join('');
 
@@ -576,15 +592,56 @@
      */
     var raisedEls = [];
 
+    /**
+     * The elements whose inline z-index we changed, with the value they had.
+     *
+     * An overlay is lifted by raising the boxes it sits in, and those boxes can
+     * be ancestors of the overlay's host - the app tree, the popup container,
+     * whatever YouTube happens to put a menu in. The teardown used to clear the
+     * z-index of the overlay alone, so every one of those ancestors kept
+     * `z-index: 2147483647 !important` for the rest of the session. YouTube's
+     * own chrome then painted under a menu container that was opened once, and
+     * the controls could not be reached any more.
+     */
+    window.MyTubeFsZIndex = [];
+
+    function setZIndex(el, value) {
+        if (!el || el === document.body || el === document.documentElement) return;
+        var list = window.MyTubeFsZIndex;
+        for (var i = 0; i < list.length; i++) {
+            if (list[i][0] === el) {
+                el.style.setProperty('z-index', value, 'important');
+                return;
+            }
+        }
+        list.push([
+            el,
+            el.style.getPropertyValue('z-index'),
+            el.style.getPropertyPriority('z-index')
+        ]);
+        el.style.setProperty('z-index', value, 'important');
+    }
+
+    function restoreZIndex() {
+        var list = window.MyTubeFsZIndex || [];
+        for (var i = 0; i < list.length; i++) {
+            var e = list[i];
+            if (!e[0]) continue;
+            if (e[2]) e[0].style.setProperty('z-index', e[1], e[2]);
+            else e[0].style.removeProperty('z-index');
+        }
+        window.MyTubeFsZIndex = [];
+    }
+
     function raiseChain(el) {
         if (raisedEls.indexOf(el) !== -1) return;
         raisedEls.push(el);
-        el.style.setProperty('z-index', '2147483647', 'important');
+        setZIndex(el, '2147483647');
         var n = el.parentElement;
         while (n && n !== document.body) {
             var cs = getComputedStyle(n);
             if (cs.position !== 'static') {
-                n.style.setProperty('z-index', '2147483647', 'important');
+                setZIndex(n, '2147483647');
             }
             n = n.parentElement;
         }
@@ -1214,7 +1271,68 @@
             containerRect: containerRect ? [Math.round(containerRect.left), Math.round(containerRect.top), Math.round(containerRect.width), Math.round(containerRect.height)] : null,
             viewport: [window.innerWidth, window.innerHeight],
             visual: window.visualViewport ? [Math.round(window.visualViewport.width), Math.round(window.visualViewport.height), window.visualViewport.scale] : null,
-            fsButton: findFsButtons().length
+            fsButton: findFsButtons().length,
+            state: window.MyTubeFsState()
+        };
+    };
+
+    /**
+     * What the app has done to the page, so a device log says whether the page
+     * is in a mode at all.
+     *
+     * The class on the html element is the thing that decides everything: the
+     * stylesheet only applies while it is there, and a class left behind by a
+     * rotation, by PiP or by a reload keeps the page stripped and its controls
+     * unreachable. This is where that shows up.
+     */
+    window.MyTubeFsState = function() {
+        var root = document.documentElement;
+        var marked = document.querySelectorAll(
+            '[' + CONTAINER_ATTR + '],[' + ANC_ATTR + '],[' + FILL_ATTR + '],' +
+            '[' + KEEP_ATTR + '],[' + RAISE_ATTR + '],[' + CHROME_OUT_ATTR + ']'
+        );
+        return {
+            fs: !!window.MyTubeFsCssOn,
+            pip: !!window.MyTubePipOn,
+            pipGuard: !!window.MyTubePipPauseGuard,
+            userPaused: !!window.MyTubeUserPaused,
+            classes: root ? (root.className || '') : '',
+            hidden: (window.MyTubeFsHidden || []).length,
+            zindex: (window.MyTubeFsZIndex || []).length,
+            marked: marked.length,
+            viewport: [window.innerWidth, window.innerHeight],
+            visual: window.visualViewport
+                ? [Math.round(window.visualViewport.width), Math.round(window.visualViewport.height), window.visualViewport.scale]
+                : null,
+            fullscreen: window.MyTubeFsFullscreenElement()
+        };
+    };
+
+    /**
+     * What YouTube put into fullscreen, and whether that is the player.
+     *
+     * The app hands the fullscreen to YouTube by tapping YouTube's own button,
+     * and what YouTube does with it decides who owns the layout afterwards. If
+     * the whole document is in fullscreen, the app's stylesheet still has to
+     * strip the page around the video. If the player itself is in fullscreen,
+     * YouTube draws its own controls in the right place, and the app's pin only
+     * puts them somewhere else.
+     */
+    window.MyTubeFsFullscreenElement = function() {
+        var e = document.fullscreenElement;
+        if (!e) {
+            return { fullscreen: false, isPlayer: false, tag: '', id: '' };
+        }
+        var isPlayer = false;
+        try {
+            if (e.closest && e.closest('.html5-video-player, #movie_player')) isPlayer = true;
+        } catch (err) {}
+        return {
+            fullscreen: true,
+            isPlayer: isPlayer,
+            tag: e.tagName ? e.tagName.toLowerCase() : '',
+            id: e.id || '',
+            cls: typeof e.className === 'string' ? e.className : ''
         };
     };
 
@@ -1275,34 +1393,32 @@
             Logless('defer: no .html5-video-player yet');
             return;
         }
-        if (window.MyTubeFsCssOn === on) {
-            if (on) reassert();
+        if (on) {
+            if (window.MyTubeFsCssOn) {
+                reassert();
+                return;
+            }
+            window.MyTubeFsCssOn = true;
+            window.MyTubePipOn = false;
+            toggleClass('mytube-fs-pip', false);
+            toggleClass('mytube-fs-css', true);
+            reassert();
+            verify('immediate', true);
+            // YouTube re-lays-out for a while after a rotation, so verify late too.
+            setTimeout(function() { if (window.MyTubeFsCssOn) { reassert(); verify('300ms', true); } }, 300);
+            setTimeout(function() { if (window.MyTubeFsCssOn) { reassert(); verify('900ms', true); } }, 900);
             return;
         }
-        window.MyTubeFsCssOn = on;
-        if (!on) {
-            toggleClass('mytube-fs-css', false);
-            if (!window.MyTubePipOn) teardown();
-            verify('off');
-            return;
-        }
-        window.MyTubePipOn = false;
-        toggleClass('mytube-fs-pip', false);
-        toggleClass('mytube-fs-css', true);
-        reassert();
-        verify('immediate', true);
-        // YouTube re-lays-out for a while after a rotation, so verify late too.
-        setTimeout(function() { if (window.MyTubeFsCssOn) { reassert(); verify('300ms', true); } }, 300);
-        setTimeout(function() { if (window.MyTubeFsCssOn) { reassert(); verify('900ms', true); } }, 900);
+        // Off. The cleanup is not conditional on what the flags say: a mode that
+        // was left on once - by a rotation, by PiP, by a reload - kept its
+        // stylesheet and its pins for the rest of the session, and the page was
+        // never the page again.
+        window.MyTubeFsCssOn = false;
+        toggleClass('mytube-fs-css', false);
+        if (!window.MyTubePipOn) teardown();
+        verify('off');
     };
 
-    /**
-     * The factor the picture is scaled by to fit into the PiP window.
-     *
-     * The page is laid out for a whole screen and the window shows the top
-     * slice of it, so the picture is scaled down by the ratio between the
-     * window and the screen.
-     */
     /**
      * Keeps the page at the width of the screen while the window is a PiP
      * window.
@@ -1318,24 +1434,14 @@
      * the window, so the player never sees a tiny window and the picture
      * still fills the window.
      */
-    var pipViewportOriginal = null;
-
-    
-
-    
-
-    
-
-
-
     window.MyTubeSetPipMode = function(on) {
         on = !!on;
-        if (window.MyTubePipOn === on) {
-            if (on) reassert();
-            return;
-        }
-        window.MyTubePipOn = on;
         if (on) {
+            if (window.MyTubePipOn) {
+                reassert();
+                return;
+            }
+            window.MyTubePipOn = true;
             window.MyTubeFsCssOn = false;
             toggleClass('mytube-fs-css', false);
             toggleClass('mytube-fs-pip', true);
@@ -1345,25 +1451,35 @@
             // Re-asserting after it settles is what keeps the player filling it.
             setTimeout(function() { if (window.MyTubePipOn) reassert(); }, 250);
             setTimeout(function() { if (window.MyTubePipOn) reassert(); }, 900);
-        } else {
-            stopPipDiag();
-            toggleClass('mytube-fs-pip', false);
-            if (!window.MyTubeFsCssOn) teardown();
+            return;
         }
+        window.MyTubePipOn = false;
+        stopPipDiag();
+        toggleClass('mytube-fs-pip', false);
+        if (!window.MyTubeFsCssOn) teardown();
     };
 
-    /** Puts the page back the way it was: no pins, nothing hidden. */
+    /**
+     * Puts the page back the way it was: no pins, nothing hidden, nothing left
+     * stacked on top of anything.
+     *
+     * Every inline style this file writes is written through a register, and the
+     * register is emptied here. That is what makes leaving fullscreen - or PiP -
+     * a clean return to the page YouTube handed over, rather than a page that
+     * still carries a menu container from an hour ago.
+     */
     function teardown() {
         clearPins();
         restoreHidden();
+        restoreZIndex();
+        restoreHitTestable();
         extraKeep = [];
         raisedEls = [];
         cachedModel = null;
         cachedModelAt = 0;
-        var overlays = document.querySelectorAll(OVERLAY_SELECTOR);
-        for (var i = 0; i < overlays.length; i++) {
-            overlays[i].style.removeProperty('z-index');
-        }
+        lastPlayer = null;
+        lastContainer = null;
+        lastChrome = [];
     }
 
     /**
@@ -1559,6 +1675,26 @@
         setTimeout(function() { window.MyTubeAutoResume = false; }, 1500);
     }
 
+    function schedulePipResume(delayMs) {
+        if (pipResumeTimer) clearTimeout(pipResumeTimer);
+        pipResumeTimer = setTimeout(function() {
+            pipResumeTimer = null;
+            resumePipVideo();
+        }, delayMs);
+    }
+
+    /**
+     * The player paused the video on its own.
+     *
+     * A pause that came with the watcher's own tap is theirs and stays: the tap
+     * in the PiP window is what the pause guard lets through, and undoing it
+     * would make the tap look like it did nothing.
+     */
+    function onPlayerPause() {
+        if (!window.MyTubePipKeepAliveOn) return;
+        if (userAskedForIt()) return;
+        resumePipVideo();
+    }
 
     function bindVideo(v) {
         ['play', 'playing', 'pause', 'ended', 'seeked', 'emptied'].forEach(function(t) {
@@ -1586,17 +1722,21 @@
     }
 
     function install() {
-        track();
-        report(true);
+        // Every step is guarded on its own. One throw used to abort the whole
+        // install, and the observer that keeps the page stripped and the route
+        // listeners were never set up - so the page was stripped exactly once,
+        // when PiP was entered, and never again.
+        try { track(); } catch (e) { Logless('install: track failed: ' + e); }
+        try { report(true); } catch (e) { Logless('install: report failed: ' + e); }
         // The page observer is started here as well as at load time. The script
         // runs at document start, where there is no documentElement to observe
         // yet - so the observer that keeps the page stripped was never started,
         // and the page was stripped exactly once, when PiP was entered.
-        startObserver();
+        try { startObserver(); } catch (e) { Logless('install: observer failed: ' + e); }
         var root = document.body || document.documentElement;
         if (!root || window.MyTubeStateObserver) return;
         window.MyTubeStateObserver = new MutationObserver(function() {
-            track();
+            try { track(); } catch (e) {}
             onRouteChange();
         });
         window.MyTubeStateObserver.observe(root, { childList: true, subtree: true });

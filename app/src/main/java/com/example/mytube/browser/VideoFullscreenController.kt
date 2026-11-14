@@ -15,6 +15,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import org.json.JSONObject
 
 private const val TAG = "MyTubeFullscreen"
 
@@ -77,9 +78,14 @@ class VideoFullscreenController(
         private set
 
     /**
-     * Whether the chrome-hiding stylesheet is applied. True for the whole of native
-     * fullscreen too, because YouTube's masthead reappears if it is dropped, so this
-     * is not a proxy for "our own UI is on screen".
+     * Whether the chrome-hiding stylesheet is applied.
+     *
+     * True for the whole of native fullscreen when YouTube put the whole document
+     * into it - the masthead reappears if the stylesheet is dropped.
+     *
+     * False when YouTube put the player itself into fullscreen: YouTube draws its
+     * own control bar in that case, and the app's pin only moved that control bar
+     * out of the visible area.
      */
     var isCssFullscreen by mutableStateOf(false)
         private set
@@ -231,8 +237,12 @@ class VideoFullscreenController(
 
             if (isCssFullscreen) {
                 isCssFullscreen = false
-                webViewManager.setFullscreenCss(fsMode, false)
             }
+            // Always told, not only when the flag says the stylesheet is on. The
+            // flag and the page can disagree - a reload, a rotation, a mode that
+            // was left behind - and a page that still carries the stylesheet
+            // keeps the video pinned and YouTube's controls out of reach.
+            webViewManager.setFullscreenCss(fsMode, false)
         } finally {
             tearingDown = false
         }
@@ -290,6 +300,15 @@ class VideoFullscreenController(
     /** Activity stopped, PiP entered, tab left: unconditional teardown. */
     fun reset() {
         dismissedUntilFlip = false
+        if (!isFullscreenActive && !isCssFullscreen && !isNativeFullscreen && !pendingNativeExit) {
+            // Nothing to tear down. Do not poke the page or the window: a reset
+            // on PiP entry used to force a viewport refresh and a late reassert
+            // right as the PiP window settled, which stalled playback.
+            mainHandler.removeCallbacks(viewportRefreshRunnable)
+            viewportRefreshPending = false
+            autoPromoteDone = false
+            return
+        }
         exitAll()
     }
 
@@ -453,12 +472,7 @@ class VideoFullscreenController(
     fun onNativeFullscreenShown() {
         isNativeFullscreen = true
         Log.d(TAG, "enter: native fullscreen (after auto-promote=$autoPromoteDone)")
-        // Keep the chrome-hiding CSS on. Native fullscreen here is usually
-        // documentElement.requestFullscreen(), which renders the whole page, so
-        // without the stylesheet YouTube's masthead stays on screen.
-        isCssFullscreen = true
         isFullscreenActive = true
-        webViewManager.setFullscreenCss(fsMode, true)
         pinWindowForVideo()
         val fv = webViewManager.fullscreenView
         Log.d(
@@ -466,6 +480,47 @@ class VideoFullscreenController(
             "enter: native fullscreen view=${fv?.javaClass?.simpleName} " +
                 "size=${fv?.width}x${fv?.height} visible=${fv?.isShown}"
         )
+        // What YouTube put into fullscreen decides who owns the layout.
+        //
+        // If the whole document is in fullscreen, the app's stylesheet still has
+        // to strip the page around the video - without it YouTube's masthead
+        // stays on screen.
+        //
+        // If the player itself is in fullscreen, YouTube draws its own controls
+        // and puts them where they belong. The app's pin then only moves them
+        // somewhere else: the control bar came up outside the visible area and
+        // the tap on the gear fell through to the video and came out as a
+        // play/pause. So the pin is released and YouTube is left alone.
+        webViewManager.evaluateJsInFromMainThread(
+            fsMode,
+            "window.MyTubeFsFullscreenElement && window.MyTubeFsFullscreenElement()"
+        ) { raw ->
+            val isPlayer = parseIsPlayerFullscreen(raw)
+            if (isPlayer) {
+                isCssFullscreen = false
+                webViewManager.setFullscreenCss(fsMode, false)
+                Log.d(TAG, "enter: native fullscreen of the player; page pin released")
+            } else {
+                isCssFullscreen = true
+                webViewManager.setFullscreenCss(fsMode, true)
+                Log.d(TAG, "enter: native fullscreen of the page; page pin kept")
+            }
+        }
+    }
+
+    /**
+     * Whether the element in fullscreen is YouTube's player.
+     *
+     * The page answers with a small JSON object; anything that cannot be read
+     * is treated as "not the player", which keeps the page pin - the state that
+     * was in place before this question existed.
+     */
+    private fun parseIsPlayerFullscreen(raw: String?): Boolean {
+        val body = raw?.trim().orEmpty()
+        if (body.isEmpty() || body == "null") return false
+        return runCatching {
+            JSONObject(body).optBoolean("isPlayer", false)
+        }.getOrDefault(false)
     }
 
     fun onNativeFullscreenHidden() {

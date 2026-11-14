@@ -677,9 +677,15 @@ class WebViewManager {
      * The CSS itself now lives in video_state.js and shares one <style> element with
      * the rotate-fullscreen mode; two separate blocks both pinned .html5-video-player
      * with !important and fought over it.
+     *
+     * Turning it off always reaches the page, even when the flag says it is
+     * already off. The flag and the page can disagree - the page was reloaded
+     * while the window was a PiP window, the mode was left behind by a rotation
+     * - and a page that still carries the PiP stylesheet keeps the video pinned
+     * over the whole window and YouTube's controls out of reach.
      */
     fun setVideoOnlyMode(enabled: Boolean) {
-        if (videoOnlyMode == enabled) return
+        if (enabled && videoOnlyMode) return
         videoOnlyMode = enabled
         evaluateJs(
             "(function(){var s=document.getElementById('mytube-pip-video-only');" +

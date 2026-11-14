@@ -59,6 +59,15 @@
 - **Auto-hide bottom bar** — the bar fades away after 5s of inactivity and returns on touch.
 - **Configurable sources** — if a Movies/Anime mirror rotates or goes down, paste a new home URL in Settings; the tab moves there at once.
 
+## What's New in v2.11.2
+
+A fix for taps that did the wrong thing — and a small PiP regression caught along the way.
+
+- **Tapping the video now opens YouTube's settings again.** After the last PiP work, tapping the player on a normal watch page or in fullscreen could only pause or resume the video. The gear and the other controls lived in a layer that was made transparent to touches, so a tap fell through to the video underneath it. The layer still lets empty space reach the video, but the controls themselves take the tap.
+- **Fullscreen controls stay where they belong.** When YouTube puts the player into its own fullscreen, MyTube now steps out of the way and lets YouTube draw its controls. Keeping the page pin on in that case pushed the control bar out of view.
+- **Leaving fullscreen and PiP leaves the page clean.** A raised overlay used to leave its parent containers stacked on top of everything for the rest of the session, and a mode that was left on once could keep the page stripped. The state is fully restored on the way out, even if the app and the page disagree about what is on.
+- **PiP still plays as it did in v2.11.1.** The touch fix is not the PiP pause guard. A no-op fullscreen reset on PiP entry was also removed — it had been forcing a late layout refresh while the PiP window settled, which could pause the picture and show a spinner on play.
+
 ## What's New in v2.11.1
 
 The PiP window plays properly now — the picture, the sound and the notification all keep still.
@@ -126,7 +135,7 @@ Under the hood, rotate-to-fullscreen no longer fakes it: MyTube taps YouTube's o
 
 Grab the latest signed APK from the **[Releases page](https://github.com/Isaac-1555/MyTube_Android/releases/latest)**.
 
-Direct download: **[MyTube-v2.11.1-release.apk](https://github.com/Isaac-1555/MyTube_Android/releases/download/v2.11.1/MyTube-v2.11.1-release.apk)**
+Direct download: **[MyTube-v2.11.2-release.apk](https://github.com/Isaac-1555/MyTube_Android/releases/download/v2.11.2/MyTube-v2.11.2-release.apk)**
 
 ### Install on Android
 
@@ -139,7 +148,7 @@ Direct download: **[MyTube-v2.11.1-release.apk](https://github.com/Isaac-1555/My
 ### Install with ADB
 
 ```bash
-adb install MyTube-v2.11.1-release.apk
+adb install MyTube-v2.11.2-release.apk
 ```
 
 ### Requirements
@@ -150,7 +159,7 @@ adb install MyTube-v2.11.1-release.apk
 ### Verify the download (optional)
 
 ```bash
-apksigner verify --print-certs MyTube-v2.11.1-release.apk
+apksigner verify --print-certs MyTube-v2.11.2-release.apk
 ```
 
 The release is signed with APK Signature Scheme v2. Certificate SHA-256:
@@ -239,6 +248,14 @@ Then build:
 `keystore.properties`, `*.jks` and `*.keystore` are git-ignored — never commit your signing keys.
 
 ## Changelog
+
+### v2.11.2 — 2026-11-14
+
+- Fix: tapping the player on a watch page or in fullscreen could only pause or resume the video, so YouTube's settings/quality/speed sheet could not be opened. A fullscreen/PiP chrome layer was made transparent to touches and the tap fell through to the video; the host still passes empty taps through but its controls take the tap again
+- Fix: when YouTube put the player itself into native fullscreen, the app's CSS pin stayed on and moved the control bar out of view. The pin is now released for player fullscreen and kept only for whole-document fullscreen
+- Fix: raised overlays left their positioned ancestors at maximum z-index for the rest of the session, and fullscreen/PiP state could be left on after a mode or page desync. Inline styles are tracked and restored on teardown, and fs/PiP off paths now always clean the page
+- Fix: `onPlayerPause` was undefined in the video-state script, which aborted install before observers/listeners were set up; install is hardened per step and PiP resume scheduling is defined
+- Fix: a no-op fullscreen reset on PiP entry forced a viewport refresh and late reassert during PiP settle, which could pause playback and show a spinner on play
 
 ### v2.11.1 — 2026-11-14
 
