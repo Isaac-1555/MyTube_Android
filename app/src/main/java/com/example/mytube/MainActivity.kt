@@ -6,6 +6,8 @@ import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.util.Rational
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
@@ -40,6 +42,14 @@ class MainActivity : ComponentActivity() {
     private lateinit var fullscreenController: VideoFullscreenController
 
     private var isInPipMode by mutableStateOf(false)
+
+    /**
+     * Set while the app is on its way into a PiP window, so [onPause] knows
+     * that the window is about to be on screen and the app is not backgrounded.
+     */
+    private var pipRequested = false
+
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     private val notifPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -151,15 +161,38 @@ class MainActivity : ComponentActivity() {
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         isInPipMode = isInPictureInPictureMode
+        if (!isInPictureInPictureMode) pipRequested = false
         if (isInPictureInPictureMode && ::fullscreenController.isInitialized) {
             fullscreenController.reset()
+        }
+        if (isInPictureInPictureMode) {
+            // The PiP window is on screen and playing, so this is not a
+            // background state: the playback service must not run its
+            // background heartbeat against it.
+            browserViewModel.playbackManager.setAppInForeground(true)
+            // The window goes away on the way into the PiP surface, and a hidden
+            // page has its media paused by the browser.
+            browserViewModel.webViewManager.setKeepPageVisible(true)
+            // The page's own player pauses the video when the window becomes a
+            // PiP window. It is resumed once, and the pause is not reported.
+            browserViewModel.webViewManager.evaluateJs(
+                "window.MyTubePipKeepAlive && window.MyTubePipKeepAlive(true)"
+            )
+        } else {
+            browserViewModel.webViewManager.evaluateJs(
+                "window.MyTubePipKeepAlive && window.MyTubePipKeepAlive(false)"
+            )
         }
         browserViewModel.webViewManager.setVideoOnlyMode(isInPictureInPictureMode)
     }
 
     override fun onResume() {
         super.onResume()
+        mainHandler.removeCallbacks(backgroundModeRunnable)
+        // The app is in front again, so it did not end up in a PiP window.
+        pipRequested = false
         browserViewModel.playbackManager.setAppInForeground(true)
+        browserViewModel.webViewManager.setKeepPageVisible(true)
         // Not while in PiP: the PiP window is still on screen and the page has to
         // stay stripped down to the video.
         if (!isInPictureInPictureMode) {
@@ -171,10 +204,40 @@ class MainActivity : ComponentActivity() {
 
     override fun onPause() {
         super.onPause()
+        // In PiP the WebView is still on screen and still playing. Treating that
+        // as "backgrounded" started the background tickers - a 1.5s page poll
+        // and a 2s service heartbeat - for a window that was visibly playing.
+        if (isInPictureInPictureMode || pipRequested) {
+            browserViewModel.playbackManager.setAppInForeground(true)
+            browserViewModel.webViewManager.setKeepPageVisible(true)
+            return
+        }
+        // The system PiP button enters PiP without onUserLeaveHint, so the PiP
+        // callback arrives after this one. The decision is taken a moment later,
+        // when it is known which of the two happened.
+        mainHandler.removeCallbacks(backgroundModeRunnable)
+        mainHandler.postDelayed(backgroundModeRunnable, BACKGROUND_DECISION_DELAY_MS)
+    }
+
+    /**
+     * Puts the app into background-playback mode, once it is known that the app
+     * is really off screen and not on its way into a PiP window.
+     */
+    private val backgroundModeRunnable = Runnable {
+        if (isInPictureInPictureMode || pipRequested) {
+            browserViewModel.playbackManager.setAppInForeground(true)
+            browserViewModel.webViewManager.setKeepPageVisible(true)
+            return@Runnable
+        }
         browserViewModel.playbackManager.setAppInForeground(false)
         if (browserViewModel.bgPlaybackEnabled.value && browserViewModel.playbackManager.isPlaying) {
+            // The playback is meant to run in the background, and a page the
+            // browser considers hidden has its media paused.
+            browserViewModel.webViewManager.setKeepPageVisible(true)
             browserViewModel.webViewManager.evaluateJs("window.setBackgroundMode && window.setBackgroundMode(true)")
             browserViewModel.webViewManager.evaluateJs("window.MyTubeBgTick && window.MyTubeBgTick()")
+        } else {
+            browserViewModel.webViewManager.setKeepPageVisible(false)
         }
     }
 
@@ -188,6 +251,16 @@ class MainActivity : ComponentActivity() {
         if (wantsPip) {
             // Landscape fullscreen and PiP both want the window. PiP wins, so tear
             // fullscreen down before handing the surface over.
+            pipRequested = true
+            // The window goes away on the way into the PiP surface, and a page
+            // the browser considers hidden has its media paused - which is what
+            // made the picture stop and the notification flip.
+            browserViewModel.webViewManager.setKeepPageVisible(true)
+            // The page's own player pauses the video when the window becomes a
+            // PiP window, so the resume has to be armed before it happens.
+            browserViewModel.webViewManager.evaluateJs(
+                "window.MyTubePipKeepAlive && window.MyTubePipKeepAlive(true)"
+            )
             fullscreenController.reset()
             wm.scrollVideoIntoView()
             wm.setVideoOnlyMode(true)
@@ -216,5 +289,14 @@ class MainActivity : ComponentActivity() {
         if (browserViewModel.notifPermissionRequested.value) return
         browserViewModel.markNotifPermissionRequested()
         notifPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+    }
+
+    private companion object {
+        /**
+         * How long the app waits before it decides that it is really backgrounded.
+         * The PiP callback arrives after onPause, so the decision cannot be made
+         * in onPause itself.
+         */
+        const val BACKGROUND_DECISION_DELAY_MS = 250L
     }
 }

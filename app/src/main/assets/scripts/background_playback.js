@@ -30,29 +30,44 @@
         });
     } catch(e) {}
 
-    window.MyTubeUserPaused = false;
     window.MyTubeBgMode = false;
+
+    /**
+     * The video element that is actually playing.
+     *
+     * A player rebuild leaves two <video> elements in the document for a moment:
+     * the old one, paused, and the new one, playing. document.querySelector('video')
+     * hands back the first in document order, which is the stale one - so every
+     * rebuild was reported to the app as "playback stopped". The app then resumed
+     * the stale element, and the media notification flipped between pause and
+     * play, several times a second.
+     *
+     * The playing element wins. With nothing playing, the element inside the
+     * player is the one that matters.
+     */
+    function activeVideo() {
+        var all = document.querySelectorAll('video');
+        if (!all.length) return null;
+        for (var i = 0; i < all.length; i++) {
+            if (!all[i].paused && !all[i].ended) return all[i];
+        }
+        for (var j = 0; j < all.length; j++) {
+            if (all[j].closest && all[j].closest('.html5-video-player, #movie_player')) {
+                return all[j];
+            }
+        }
+        return all[0];
+    }
 
     window.setBackgroundMode = function(enabled) {
         window.MyTubeBgMode = enabled;
     };
 
-    window.MyTubePause = function() {
-        window.MyTubeUserPaused = true;
-        var v = document.querySelector('video');
-        if (v) v.pause();
-    };
-    window.MyTubePlay = function() {
-        window.MyTubeUserPaused = false;
-        var v = document.querySelector('video');
-        if (v) v.play();
-    };
-
     window.MyTubeBgTick = function() {
-        var v = document.querySelector('video');
+        var v = activeVideo();
         if (!v) return;
         if (window.MyTubeBgMode && !window.MyTubeUserPaused && !v.ended && v.currentTime > 0 && v.paused) {
-            v.play().catch(function(){});
+            forceResume(v);
         }
         reportState();
     };
@@ -206,7 +221,7 @@
         }
         var og = document.querySelector('meta[property="og:image"]');
         if (og && absoluteUrl(og.content)) return absoluteUrl(og.content);
-        var v = document.querySelector('video');
+        var v = activeVideo();
         if (v && absoluteUrl(v.poster)) return absoluteUrl(v.poster);
         return '';
     }
@@ -215,24 +230,44 @@
         return window.MyTubeBgMode && !window.MyTubeUserPaused && !v.ended && v.currentTime > 0 && v.paused;
     }
 
+    /**
+     * Puts the playback back on after a pause the page made on its own.
+     *
+     * The pause is not reported to the app: it is about to be undone, and
+     * reporting it flips the media notification to paused and straight back to
+     * playing - which is what the notification was doing, several times a
+     * second. The flag is dropped if the resume does not take.
+     */
     function forceResume(v) {
-        if (shouldResume(v)) v.play().catch(function(){});
+        if (!shouldResume(v)) return;
+        window.MyTubeAutoResume = true;
+        var p = v.play();
+        if (p && p.catch) {
+            p.catch(function() { window.MyTubeAutoResume = false; });
+        }
+        setTimeout(function() { window.MyTubeAutoResume = false; }, 1500);
     }
 
     var lastReportKey = '';
     function reportState() {
-        var v = document.querySelector('video');
+        var v = activeVideo();
         if (!v || !window.Android) return;
         pushCurrentVideo();
         var title = document.title.replace(/^(\(\d+\)\s+)?/, '').replace(' - YouTube', '');
         var artUrl = getArtUrl();
         var canNext = hasNext();
         var canPrev = hasPrev();
-        var key = (!!v.paused) + '|' + title + '|' + (v.duration | 0) + '|' + Math.floor(v.currentTime) +
-            '|' + artUrl + '|' + canNext + '|' + canPrev;
+        // A pause that is about to be undone is not a pause. Reporting it flips
+        // the media notification between pause and play.
+        var paused = !!v.paused && !window.MyTubeAutoResume;
+        // The position is reported in five-second steps: the service extrapolates
+        // it from there, and a report per second meant a bridge call, a service
+        // intent and a media-session update every second, for nothing.
+        var key = paused + '|' + title + '|' + (v.duration | 0) + '|' +
+            Math.floor(v.currentTime / 5) + '|' + artUrl + '|' + canNext + '|' + canPrev;
         if (key === lastReportKey) return;
         lastReportKey = key;
-        window.Android.onPlaybackStateChanged(!v.paused, title, v.duration || 0, v.currentTime || 0, artUrl, canNext, canPrev);
+        window.Android.onPlaybackStateChanged(!paused, title, v.duration || 0, v.currentTime || 0, artUrl, canNext, canPrev);
     }
 
     var lastVideo = null;
@@ -251,22 +286,25 @@
     }
 
     function onVideoPaused() {
-        var v = document.querySelector('video');
+        var v = activeVideo();
         if (v && v !== lastVideo) attachVideo(v);
-        if (v) forceResume(v);
+        // Only the element that is actually the player's is resumed. A stale
+        // element left behind by a player rebuild would be started again, and
+        // then the two of them would fight over the audio.
+        if (v && v === lastVideo) forceResume(v);
     }
 
-    var v0 = document.querySelector('video');
+    var v0 = activeVideo();
     if (v0) attachVideo(v0);
 
     var videoObserver = new MutationObserver(function() {
-        var v = document.querySelector('video');
+        var v = activeVideo();
         if (v && v !== lastVideo) attachVideo(v);
     });
     videoObserver.observe(document.body, { childList: true, subtree: true });
 
     setInterval(function() {
-        var v = document.querySelector('video');
+        var v = activeVideo();
         if (!v) return;
         forceResume(v);
         reportState();

@@ -314,9 +314,17 @@ class WebViewManager {
                 @Suppress("DEPRECATION")
                 databaseEnabled = true
                 useWideViewPort = true
-                // The PiP window is small; the overview mode would zoom the page
-                // out to fit and put the page layout next to the video.
-                loadWithOverviewMode = !videoOnlyMode
+                // Constant for the life of the tab. It used to be switched off
+                // when the PiP window opened, and changing a WebSetting at
+                // runtime re-lays-out the whole page - with the video playing -
+                // which is what made the picture stutter and buffer on the way
+                // into PiP.
+                //
+                // The overview mode does not need to be off for the PiP picture:
+                // it maps the layout viewport onto the visible window, so 100vw
+                // and 100vh are the window, and the page around the player is
+                // hidden by the sweep anyway.
+                loadWithOverviewMode = true
                 builtInZoomControls = false
                 setSupportZoom(false)
                 mediaPlaybackRequiresUserGesture = false
@@ -673,13 +681,6 @@ class WebViewManager {
     fun setVideoOnlyMode(enabled: Boolean) {
         if (videoOnlyMode == enabled) return
         videoOnlyMode = enabled
-        val wv = activeWebView()
-        // The PiP window is small. With the overview mode on, Chromium widens the
-        // layout viewport to the page's minimum width and scales the lot down, and
-        // that is how a related-videos sidebar ends up next to the video. Turning
-        // it off for the duration of PiP keeps the layout viewport the width of
-        // the window, so 100vw is what the user actually sees.
-        wv?.settings?.loadWithOverviewMode = !enabled
         evaluateJs(
             "(function(){var s=document.getElementById('mytube-pip-video-only');" +
                 "if(s&&s.parentNode){s.parentNode.removeChild(s);}" +
@@ -887,6 +888,19 @@ class WebViewManager {
     fun evaluateJsInFromMainThread(mode: BrowserMode, script: String, onResult: (String?) -> Unit) {
         mainHandler.post {
             webViewFor(mode)?.evaluateJavascript(script) { onResult(it) }
+        }
+    }
+
+    /**
+     * Keeps the page visible to Chromium, so it is not paused behind the app's
+     * back.
+     *
+     * Chromium pauses the media of a page that goes hidden, and the window goes
+     * away when the app enters a PiP window. See [MediaWebView.keepPageVisible].
+     */
+    fun setKeepPageVisible(keep: Boolean) {
+        listOf(webView, musicWebView, moviesWebView, animeWebView).forEach { wv ->
+            (wv as? MediaWebView)?.keepPageVisible = keep
         }
     }
 

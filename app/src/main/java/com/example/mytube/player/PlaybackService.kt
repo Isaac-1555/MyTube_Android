@@ -64,6 +64,32 @@ class PlaybackService : MediaBrowserServiceCompat() {
     }
     private val idleTimeoutRunnable = Runnable { stop() }
     private val bgPauseTimeoutRunnable = Runnable { stop() }
+
+    /**
+     * A pause the page reported that has not been confirmed yet.
+     */
+    private var pendingPause = false
+
+    /**
+     * Confirms a pause that was reported by the page.
+     *
+     * The page pauses the video element for a moment around every player
+     * rebuild, and a pause that is acted on straight away flips the media
+     * notification between pause and play. Nothing is announced until the pause
+     * has lasted long enough to be a real one.
+     */
+    private val pendingPauseRunnable = Runnable {
+        if (!pendingPause) return@Runnable
+        pendingPause = false
+        if (!isPlaying) return@Runnable
+        isPlaying = false
+        updatePlaybackState(false)
+        startWithNotification()
+        stopHeartbeat()
+        releaseWakeLock()
+        startIdleTimeout()
+        cancelBgPauseTimeout()
+    }
     private var lastNotifiedTitle = ""
     private var lastNotifiedDuration = -1L
     private var lastNotifiedPlaying = false
@@ -127,6 +153,8 @@ class PlaybackService : MediaBrowserServiceCompat() {
                 startWithNotification()
             }
             ACTION_PLAY -> {
+                pendingPause = false
+                mainHandler.removeCallbacks(pendingPauseRunnable)
                 isPlaying = true
                 evaluateJs("window.MyTubePlay && window.MyTubePlay()")
                 updatePlaybackState(true)
@@ -136,6 +164,8 @@ class PlaybackService : MediaBrowserServiceCompat() {
                 cancelBgPauseTimeout()
             }
             ACTION_PAUSE -> {
+                pendingPause = false
+                mainHandler.removeCallbacks(pendingPauseRunnable)
                 isPlaying = false
                 evaluateJs("window.MyTubePause && window.MyTubePause()")
                 updatePlaybackState(false)
@@ -149,6 +179,8 @@ class PlaybackService : MediaBrowserServiceCompat() {
                 // The widget sends a single toggle because its button reflects
                 // session state that can be a beat behind the service.
                 if (isPlaying) {
+                    pendingPause = false
+                    mainHandler.removeCallbacks(pendingPauseRunnable)
                     isPlaying = false
                     evaluateJs("window.MyTubePause && window.MyTubePause()")
                     updatePlaybackState(false)
@@ -176,7 +208,27 @@ class PlaybackService : MediaBrowserServiceCompat() {
             }
             Constants.ACTION_UPDATE_METADATA -> {
                 val wasPlaying = isPlaying
-                isPlaying = intent.getBooleanExtra("playing", false)
+                val reportedPlaying = intent.getBooleanExtra("playing", false)
+                if (reportedPlaying) {
+                    // A play always wins over a pause that has not been confirmed.
+                    mainHandler.removeCallbacks(pendingPauseRunnable)
+                    pendingPause = false
+                    isPlaying = true
+                } else if (isPlaying) {
+                    // The page pauses the video element for a moment around every
+                    // player rebuild, and around every stall. Acting on that
+                    // straight away flipped the media notification between pause
+                    // and play several times a second, so the pause is confirmed
+                    // a moment later instead.
+                    if (!pendingPause) {
+                        pendingPause = true
+                        mainHandler.postDelayed(pendingPauseRunnable, PAUSE_CONFIRM_DELAY_MS)
+                    }
+                    // Still playing until the pause is confirmed.
+                    isPlaying = true
+                } else {
+                    isPlaying = false
+                }
                 currentTitle = intent.getStringExtra("title") ?: "MyTube"
                 currentDuration = intent.getLongExtra("duration", 0L)
                 currentPosition = intent.getLongExtra("position", 0L)
@@ -497,6 +549,8 @@ class PlaybackService : MediaBrowserServiceCompat() {
         stopHeartbeat()
         cancelIdleTimeout()
         cancelBgPauseTimeout()
+        pendingPause = false
+        mainHandler.removeCallbacks(pendingPauseRunnable)
         releaseWakeLock()
         mediaSession?.isActive = false
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -507,6 +561,8 @@ class PlaybackService : MediaBrowserServiceCompat() {
         stopHeartbeat()
         cancelIdleTimeout()
         cancelBgPauseTimeout()
+        pendingPause = false
+        mainHandler.removeCallbacks(pendingPauseRunnable)
         releaseWakeLock()
         unregisterReceiver(noisyReceiver)
         mediaSession?.release()
@@ -565,5 +621,13 @@ class PlaybackService : MediaBrowserServiceCompat() {
         private const val HEARTBEAT_INTERVAL_MS = 2000L
         private const val BG_PAUSE_TIMEOUT_MS = 60_000L
         private const val ART_TIMEOUT_MS = 8000
+
+        /**
+         * How long a pause the page reported has to last before it is believed.
+         * The page pauses the video element for a moment around every player
+         * rebuild, and believing that pause straight away flipped the media
+         * notification between pause and play.
+         */
+        private const val PAUSE_CONFIRM_DELAY_MS = 1_200L
     }
 }

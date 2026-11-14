@@ -4,6 +4,12 @@
 
     var STYLE_ID = 'mytube-fs';
 
+    /**
+     * How long the collected mutations may wait for a frame before they are
+     * flushed anyway. A frame is not painted when the window is off screen.
+     */
+    var FLUSH_FALLBACK_MS = 250;
+
     // Marks the container pinned to the viewport, the ancestors that must not
     // create a containing block, the boxes between the container and the video,
     // and the chrome that has to stay on top.
@@ -186,12 +192,42 @@
         return allMatch(CHROME_SELECTOR);
     }
 
+    /**
+     * The video element that is actually playing.
+     *
+     * A player rebuild leaves two <video> elements in the document for a moment:
+     * the old one, paused, and the new one, playing. document.querySelector('video')
+     * hands back the first in document order, which is the stale one - so every
+     * rebuild was reported to the app as "playback stopped", the app resumed the
+     * stale element, and the media notification flipped between pause and play.
+     *
+     * The playing element wins. With nothing playing, the element inside the
+     * player is the one that matters, and only if there is none does a stray
+     * element anywhere on the page count.
+     */
+    function activeVideo() {
+        var all = allMatch('video');
+        if (!all.length) return null;
+        for (var i = 0; i < all.length; i++) {
+            if (!all[i].paused && !all[i].ended) return all[i];
+        }
+        for (var j = 0; j < all.length; j++) {
+            if (all[j].closest && all[j].closest('.html5-video-player, #movie_player')) {
+                return all[j];
+            }
+        }
+        return all[0];
+    }
+
     function playerEl() {
+        var v = activeVideo();
+        if (v && v.closest) {
+            var own = v.closest('.html5-video-player');
+            if (own) return own;
+        }
         var p = firstMatch('.html5-video-player');
         if (p) return p;
-        var v = firstMatch('video');
-        if (v && v.closest) return v.closest('.html5-video-player');
-        return null;
+        return v;
     }
 
     function containsChrome(node, chrome) {
@@ -235,6 +271,26 @@
     }
 
     /**
+     * The player model, cached.
+     *
+     * Working it out costs two document-wide queries and a walk up the tree,
+     * and the page mutates several times a second. The model only changes when
+     * YouTube rebuilds the player, so it is refreshed a few times a second
+     * instead of on every frame.
+     */
+    var MODEL_REFRESH_MS = 250;
+    var cachedModel = null;
+    var cachedModelAt = 0;
+
+    function currentModel() {
+        var now = Date.now();
+        if (cachedModel && now - cachedModelAt < MODEL_REFRESH_MS) return cachedModel;
+        cachedModel = model();
+        cachedModelAt = now;
+        return cachedModel;
+    }
+
+    /**
      * The boxes between the container and the video. They are made static and
      * full size so that the video is laid out against the container and not
      * against whichever one of them happens to be positioned.
@@ -270,9 +326,10 @@
      * controls ended up never fading.
      */
     function sweepAll(keep, container) {
-        restoreHidden();
         if (!document.body || !keep.length) return;
 
+        // What has to be hidden.
+        var wanted = [];
         keep.forEach(function (root) {
             var chain = ancestorChain(root);
             for (var i = 1; i < chain.length; i++) {
@@ -287,12 +344,37 @@
                 for (var j = 0; j < kids.length; j++) {
                     var child = kids[j];
                     if (child === onPath) continue;
-                    if (isKeepish(child, keep)) continue;
+                    // Anything that belongs to the player - the video, the
+                    // element that holds it, the controls - is left alone. The
+                    // player puts the video and its controls side by side, so
+                    // hiding one of them takes the other with it.
+                    if (isInsideKeep(child, keep)) continue;
                     if (isSkippable(child)) continue;
-                    hide(child);
+                    wanted.push(child);
                 }
             }
         });
+
+        // Only what changed is touched. The sweep used to restore every hidden
+        // element and hide them all again, which is a style write and a layout
+        // for every element on the page - every time YouTube rebuilt its player.
+        var list = window.MyTubeFsHidden || [];
+        for (var k = list.length - 1; k >= 0; k--) {
+            var e = list[k];
+            var el = e[0];
+            if (!el || !el.isConnected) {
+                // Gone from the page: drop it from the register.
+                list.splice(k, 1);
+                continue;
+            }
+            if (wanted.indexOf(el) === -1) {
+                restoreOne(e);
+                list.splice(k, 1);
+            }
+        }
+        for (var w = 0; w < wanted.length; w++) {
+            if (!isHiddenByUs(wanted[w])) hide(wanted[w]);
+        }
     }
 
     /**
@@ -302,21 +384,61 @@
      * which on a page that rewrites itself several times a second is a lot of
      * style work for nothing - and it is audible in the PiP audio. The sweep
      * establishes the invariant once; this keeps it true as the page changes.
+     *
+     * Nothing inside the player area is touched. The player inserts its own
+     * elements all the time - a new media element on a quality switch, the
+     * caption layer, the ad module - and hiding them broke playback: the video
+     * element was hidden out from under the decoder, which restarted the
+     * stream and left the picture stuttering and buffering.
      */
-    function hideAdded(nodes, keep) {
+    function hideAdded(nodes, keep, container) {
         if (!nodes) return;
         for (var i = 0; i < nodes.length; i++) {
             var n = nodes[i];
             if (n.nodeType !== 1) continue;
-            if (isKeepish(n, keep)) continue;
+            if (isInsidePlayer(n, container)) continue;
+            if (isInsideKeep(n, keep)) continue;
             if (isSkippable(n)) continue;
             hide(n);
             // The new node may carry children of its own.
             var kids = n.children;
             for (var j = 0; j < kids.length; j++) {
-                if (isKeepish(kids[j], keep)) continue;
+                if (isInsidePlayer(kids[j], container)) continue;
+                if (isInsideKeep(kids[j], keep)) continue;
                 hide(kids[j]);
             }
+        }
+    }
+
+    /**
+     * Whether the node belongs to a kept element: it is the element itself, it
+     * is inside it, or it carries it.
+     *
+     * The inside case matters as much as the outside one: YouTube adds elements
+     * to its own control bar all the time, and hiding those took the controls
+     * away with it.
+     */
+    function isInsideKeep(el, keep) {
+        for (var i = 0; i < keep.length; i++) {
+            var k = keep[i];
+            if (!k) continue;
+            try {
+                if (k === el || k.contains(el) || el.contains(k)) return true;
+            } catch (e) {}
+        }
+        return false;
+    }
+
+    /**
+     * Whether the node belongs to the player area: inside it, or an ancestor of
+     * it. An ancestor carries the player with it, so it must not be hidden either.
+     */
+    function isInsidePlayer(el, container) {
+        if (!container || !el) return false;
+        try {
+            return container.contains(el) || el.contains(container);
+        } catch (e) {
+            return false;
         }
     }
 
@@ -353,13 +475,17 @@
         el.style.setProperty('display', 'none', 'important');
     }
 
+    function restoreOne(e) {
+        if (e[2]) e[0].style.setProperty('display', e[1], e[2]);
+        else e[0].style.display = e[1];
+    }
+
     function restoreHidden() {
         var list = window.MyTubeFsHidden || [];
         for (var i = 0; i < list.length; i++) {
             var e = list[i];
             if (!e[0]) continue;
-            if (e[2]) e[0].style.setProperty('display', e[1], e[2]);
-            else e[0].style.display = e[1];
+            restoreOne(e);
         }
         window.MyTubeFsHidden = [];
     }
@@ -371,6 +497,24 @@
     }
 
     // ------------------------------------------------------------- overlays ---
+
+    /**
+     * Refreshes the overlays, at most a few times a second.
+     *
+     * Every overlay that is open has its chain of ancestors read with
+     * getComputedStyle, and getComputedStyle forces a style recalculation.
+     * Doing that on every mutation meant a forced recalculation several times
+     * a second, on a page that mutates constantly.
+     */
+    var OVERLAY_REFRESH_MS = 250;
+    var lastOverlayAt = 0;
+
+    function maybeRefreshOverlays(m) {
+        var now = Date.now();
+        if (now - lastOverlayAt < OVERLAY_REFRESH_MS) return;
+        lastOverlayAt = now;
+        keepOverlays(m);
+    }
 
     /**
      * Keeps YouTube's own overlays - the quality sheet above all - alive.
@@ -385,9 +529,9 @@
      * actually opened it: a container carrying the `hidden` attribute is still
      * closed and must stay out of the way.
      */
-    function keepOverlays() {
+    function keepOverlays(m) {
         var cands = allMatch(OVERLAY_SELECTOR);
-        var m = model();
+        if (!m) m = model();
         var needSweep = false;
         for (var i = 0; i < cands.length; i++) {
             var el = cands[i];
@@ -419,7 +563,22 @@
         return false;
     }
 
+    /**
+     * Lifts an overlay and the boxes it sits in above the pinned player.
+     *
+     * The walk reads getComputedStyle on every ancestor, and getComputedStyle
+     * forces a style recalculation - so doing it on every mutation meant a
+     * forced recalculation several times a second, on a page that mutates
+     * constantly. That is the audio stutter in the PiP window.
+     *
+     * An overlay that has already been raised is left alone. It is raised again
+     * if the page rebuilds it, which [applyModel]'s sweep notices.
+     */
+    var raisedEls = [];
+
     function raiseChain(el) {
+        if (raisedEls.indexOf(el) !== -1) return;
+        raisedEls.push(el);
         el.style.setProperty('z-index', '2147483647', 'important');
         var n = el.parentElement;
         while (n && n !== document.body) {
@@ -461,8 +620,8 @@
     var lastContainer = null;
     var lastChrome = [];
 
-    function applyModel(force) {
-        var m = model();
+    function applyModel(force, pre) {
+        var m = pre || model();
         if (!m.container) return false;
 
         var chromeChanged = m.chrome.length !== lastChrome.length ||
@@ -511,7 +670,6 @@
             if (poster && !isKeepish(poster, m.keep)) hide(poster);
         }
 
-        keepOverlays();
         return true;
     }
 
@@ -530,7 +688,11 @@
         styleEl();
         root.classList.add(want);
         root.classList.remove(other);
-        applyModel(true);
+        var m = model();
+        cachedModel = m;
+        cachedModelAt = Date.now();
+        applyModel(true, m);
+        keepOverlays(m);
         if (window.MyTubeFsCssOn) verify('reassert', true);
     }
 
@@ -548,7 +710,7 @@
         if (now - pipDiagLast < 2000) return;
         pipDiagLast = now;
         try {
-            var v = document.querySelector('video');
+            var v = activeVideo();
             if (!v) return;
             var q = v.getVideoPlaybackQuality ? v.getVideoPlaybackQuality() : null;
             var r = v.getBoundingClientRect();
@@ -557,31 +719,108 @@
                 ' rect=' + [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)].join(',') +
                 ' vp=' + window.innerWidth + 'x' + window.innerHeight +
                 ' scale=' + (window.visualViewport ? window.visualViewport.scale : '?') +
-                ' paused=' + v.paused;
+                ' paused=' + v.paused +
+                ' t=' + Math.round(v.currentTime) +
+                ' rs=' + v.readyState + ' ns=' + v.networkState +
+                ' t=' + Math.round(v.currentTime) +
+                ' rs=' + v.readyState + ' ns=' + v.networkState +
+                ' nvid=' + document.querySelectorAll('video').length +
+                ' mut=' + (window.MyTubeMutCount || 0) +
+                ' flush=' + (window.MyTubeFlushCount || 0);
             if (window.Android && window.Android.onFullscreenCssAudit) {
                 window.Android.onFullscreenCssAudit(msg);
             }
         } catch (e) {}
     }
 
+    /**
+     * The PiP report runs on a timer of its own, not off the mutation observer.
+     *
+     * The observer only fires when the page changes, so a page that has gone
+     * quiet says nothing at all - and a stalled picture and a stalled observer
+     * look the same from the outside. The timer tells the two apart.
+     */
+    var pipDiagTimer = null;
+    function startPipDiag() {
+        if (pipDiagTimer) return;
+        pipDiagTimer = setInterval(function() { pipDiag(); }, 2000);
+        pipDiag();
+    }
+
+    function stopPipDiag() {
+        if (!pipDiagTimer) return;
+        clearInterval(pipDiagTimer);
+        pipDiagTimer = null;
+    }
+
+    /**
+     * The pending work from the mutation observer.
+     *
+     * The page rewrites itself several times a second, and every batch used to
+     * cost a full document query, a forced style recalculation and a set of
+     * attribute writes - on the renderer's main thread, which is the thread the
+     * media pipeline shares. That is where the micro-stutter in the PiP audio
+     * came from.
+     *
+     * The batches are now collected and flushed once per frame, so the cost is
+     * one flush per frame no matter how much the page moved.
+     */
+    var pendingAdded = [];
+    var dirty = false;
+    var flushScheduled = false;
+    var flushTimer = null;
+
+    function flushMutations() {
+        flushScheduled = false;
+        if (flushTimer) {
+            clearTimeout(flushTimer);
+            flushTimer = null;
+        }
+        if (!dirty) return;
+        dirty = false;
+        window.MyTubeFlushCount = (window.MyTubeFlushCount || 0) + 1;
+        if (!isFsActive()) {
+            pendingAdded = [];
+            return;
+        }
+        var added = pendingAdded;
+        pendingAdded = [];
+        var m = currentModel();
+        // Hide what was added outside the player. The full sweep is not run
+        // again here: it restores and re-applies display on every element it
+        // touches, and a page that rewrites itself several times a second
+        // would pay for that over and over - which is audible in the PiP audio.
+        hideAdded(added, m.keep, m.container);
+        applyModel(false, m);
+        maybeRefreshOverlays(m);
+        pipDiag();
+    }
+
+    function scheduleFlush() {
+        if (flushScheduled) return;
+        flushScheduled = true;
+        var raf = window.requestAnimationFrame ||
+            function (cb) { return setTimeout(cb, 16); };
+        raf(flushMutations);
+        // A frame does not get painted when the window is not on screen, and the
+        // pending nodes would pile up until it is. The timeout picks them up.
+        flushTimer = setTimeout(flushMutations, FLUSH_FALLBACK_MS);
+    }
+
     function startObserver() {
         if (window.MyTubeFsObserver) return;
         window.MyTubeFsObserver = new MutationObserver(function (records) {
             if (!isFsActive()) return;
-            var added = [];
+            window.MyTubeMutCount = (window.MyTubeMutCount || 0) + records.length;
+            dirty = true;
             for (var i = 0; i < records.length; i++) {
                 var r = records[i];
                 if (r.type !== 'childList') continue;
-                for (var j = 0; j < r.addedNodes.length; j++) added.push(r.addedNodes[j]);
+                for (var j = 0; j < r.addedNodes.length; j++) {
+                    pendingAdded.push(r.addedNodes[j]);
+                }
             }
-            var m = model();
-            // Hide what was added outside the player. The full sweep is not run
-            // again here: it restores and re-applies display on every element it
-            // touches, and a page that rewrites itself several times a second
-            // would pay for that over and over - which is audible in the PiP audio.
-            hideAdded(added, m.keep);
-            applyModel(false);
-            pipDiag();
+            scheduleFlush();
         });
         window.MyTubeFsObserver.observe(document.documentElement, {
             childList: true, subtree: true
@@ -1057,6 +1296,38 @@
         setTimeout(function() { if (window.MyTubeFsCssOn) { reassert(); verify('900ms', true); } }, 900);
     };
 
+    /**
+     * The factor the picture is scaled by to fit into the PiP window.
+     *
+     * The page is laid out for a whole screen and the window shows the top
+     * slice of it, so the picture is scaled down by the ratio between the
+     * window and the screen.
+     */
+    /**
+     * Keeps the page at the width of the screen while the window is a PiP
+     * window.
+     *
+     * The PiP window is a couple of hundred pixels wide, and a page laid out
+     * for that is in YouTube's extra-small-width mode - a mode in which the
+     * player pauses the video by itself and undoes every play that comes from
+     * anywhere else. The app and the page then fight over the video: the
+     * media notification flips between pause and play, every change restarts
+     * the audio, and the picture keeps re-buffering.
+     *
+     * The page keeps the width of the screen and the browser shrinks it into
+     * the window, so the player never sees a tiny window and the picture
+     * still fills the window.
+     */
+    var pipViewportOriginal = null;
+
+    
+
+    
+
+    
+
+
+
     window.MyTubeSetPipMode = function(on) {
         on = !!on;
         if (window.MyTubePipOn === on) {
@@ -1069,11 +1340,13 @@
             toggleClass('mytube-fs-css', false);
             toggleClass('mytube-fs-pip', true);
             reassert();
+            startPipDiag();
             // The window changes size on the way into PiP and again on the way out.
             // Re-asserting after it settles is what keeps the player filling it.
             setTimeout(function() { if (window.MyTubePipOn) reassert(); }, 250);
             setTimeout(function() { if (window.MyTubePipOn) reassert(); }, 900);
         } else {
+            stopPipDiag();
             toggleClass('mytube-fs-pip', false);
             if (!window.MyTubeFsCssOn) teardown();
         }
@@ -1084,6 +1357,9 @@
         clearPins();
         restoreHidden();
         extraKeep = [];
+        raisedEls = [];
+        cachedModel = null;
+        cachedModelAt = 0;
         var overlays = document.querySelectorAll(OVERLAY_SELECTOR);
         for (var i = 0; i < overlays.length; i++) {
             overlays[i].style.removeProperty('z-index');
@@ -1131,7 +1407,7 @@
     var lastKey = '';
     function report(force) {
         if (!window.Android || !window.Android.onVideoStateChanged) return;
-        var v = document.querySelector('video');
+        var v = activeVideo();
         var watch = isWatchPage();
         var has = !!v;
         // Deliberately not gated on currentTime > 0. During a rotation the page can
@@ -1154,15 +1430,146 @@
 
     window.MyTubeReportVideoState = function() { report(true); };
 
+    /**
+     * Whether the person watching asked for the video to be paused.
+     *
+     * The app asks for the pause through the same door, so the flag has to
+     * live where the app's own code can see it.
+     */
+    window.MyTubeUserPaused = false;
+
+    window.MyTubePause = function() {
+        window.MyTubeUserPaused = true;
+        window.MyTubeAutoResume = false;
+        var v = activeVideo();
+        if (v) v.pause();
+    };
+
+    window.MyTubePlay = function() {
+        window.MyTubeUserPaused = false;
+        var v = activeVideo();
+        if (v) v.play();
+    };
+
+    /**
+     * Keeps the playback alive in a PiP window.
+     *
+     * The mobile web player pauses the video by itself when the window is
+     * turned into a PiP window - it does it from its own player code, with no
+     * visibility event and no user action - and it pauses it again about half a
+     * second after anything plays it. The player does not take a window that
+     * is only a couple of hundred pixels wide: it puts itself in its
+     * extra-small-width mode, and in that mode it stops the video.
+     *
+     * So the video is resumed here, and the pause that is undone is never
+     * reported to the app. That is what the flip in the media notification was:
+     * the app reported the pause, the app resumed the video, and the player
+     * paused it again - several times a second, with the audio restarted on
+     * every change.
+     */
+    window.MyTubePipKeepAlive = function(on) {
+        window.MyTubePipKeepAliveOn = !!on;
+        if (!on && pipResumeTimer) {
+            clearTimeout(pipResumeTimer);
+            pipResumeTimer = null;
+        }
+        installPipPauseGuard(!!on);
+    };
+
+    /**
+     * Stops the page's own player from pausing the video in a PiP window.
+     *
+     * The mobile web player pauses the video by itself when the window is a PiP
+     * window - it does it from its own player code, and it does it again after
+     * every play. The app resumed the video, the player paused it again, and
+     * the two fought over it: the audio was restarted on every change, which is
+     * the stutter, and the picture kept re-buffering.
+     *
+     * The pause is refused instead: the video carries on playing, and nothing
+     * is restarted. A pause that the app itself asks for - the notification,
+     * the widget - goes through, because the app sets the flag before it
+     * pauses.
+     */
+    /**
+     * Whether the pause comes from the person watching.
+     *
+     * A tap in the PiP window gives the page a transient user activation, and
+     * that is what tells the player's own pause apart from the pause the
+     * player makes by itself.
+     */
+    function userAskedForIt() {
+        try {
+            return !!(navigator.userActivation && navigator.userActivation.isActive);
+        } catch (e) {
+            return false;
+        }
+    }
+
+    function installPipPauseGuard(on) {
+        if (on) {
+            if (window.MyTubePipPauseGuard) return;
+            try {
+                var proto = HTMLMediaElement.prototype;
+                var orig = proto.pause;
+                proto.pause = function() {
+                    if (window.MyTubePipKeepAliveOn && !window.MyTubeUserPaused && !userAskedForIt()) {
+                        return undefined;
+                    }
+                    return orig.apply(this, arguments);
+                };
+                window.MyTubePipPauseGuard = orig;
+            } catch (e) {}
+        } else if (window.MyTubePipPauseGuard) {
+            try {
+                HTMLMediaElement.prototype.pause = window.MyTubePipPauseGuard;
+            } catch (e) {}
+            window.MyTubePipPauseGuard = null;
+        }
+    }
+
+    var pipResumeTimer = null;
+    var pipResumeAt = 0;
+
+    /** The shortest gap between two resumes. */
+    var PIP_RESUME_INTERVAL_MS = 1500;
+
+    /**
+     * Resumes the video, if it is stopped and if the last resume was long
+     * enough ago.
+     */
+    function resumePipVideo() {
+        if (!window.MyTubePipKeepAliveOn) return;
+        var now = Date.now();
+        var wait = PIP_RESUME_INTERVAL_MS - (now - pipResumeAt);
+        if (wait > 0) {
+            // Too soon after the last one. Waiting it out, rather than giving
+            // up: the player has paused the video again by then.
+            schedulePipResume(wait);
+            return;
+        }
+        var v = activeVideo();
+        if (!v || !v.paused || v.ended || window.MyTubeUserPaused) return;
+        pipResumeAt = now;
+        // The pause is about to be undone, so it is not a pause as far as the
+        // app is concerned.
+        window.MyTubeAutoResume = true;
+        try {
+            v.play();
+        } catch (e) {}
+        setTimeout(function() { window.MyTubeAutoResume = false; }, 1500);
+    }
+
+
     function bindVideo(v) {
         ['play', 'playing', 'pause', 'ended', 'seeked', 'emptied'].forEach(function(t) {
             v.addEventListener(t, function() { report(true); });
         });
+        v.addEventListener('pause', onPlayerPause);
     }
 
     var boundVideo = null;
     function track() {
-        var v = document.querySelector('video');
+        var v = activeVideo();
         if (v && v !== boundVideo) {
             boundVideo = v;
             bindVideo(v);
@@ -1181,6 +1588,11 @@
     function install() {
         track();
         report(true);
+        // The page observer is started here as well as at load time. The script
+        // runs at document start, where there is no documentElement to observe
+        // yet - so the observer that keeps the page stripped was never started,
+        // and the page was stripped exactly once, when PiP was entered.
+        startObserver();
         var root = document.body || document.documentElement;
         if (!root || window.MyTubeStateObserver) return;
         window.MyTubeStateObserver = new MutationObserver(function() {
