@@ -24,8 +24,8 @@ android {
         applicationId = "com.example.mytube"
         minSdk = 24
         targetSdk = 36
-        versionCode = 11
-        versionName = "2.11.2"
+        versionCode = 12
+        versionName = "2.11.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

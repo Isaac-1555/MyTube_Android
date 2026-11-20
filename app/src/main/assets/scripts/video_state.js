@@ -481,6 +481,24 @@
         return tag === 'SCRIPT' || tag === 'STYLE' || tag === 'LINK' || tag === 'TEMPLATE';
     }
 
+    /**
+     * Whether a node that the page just added is, or carries, player chrome.
+     *
+     * YouTube does not draw #player-control-overlay until the first touch, and
+     * the overlay is what makes the chrome hosts around it unsafe to position
+     * (see canRaise). The model is cached for a quarter of a second, so a model
+     * worked out before the overlay appeared would keep the hosts raised. This
+     * is what tells the flush to work the model out again.
+     */
+    function addsChrome(node) {
+        if (!node || node.nodeType !== 1) return false;
+        try {
+            if (node.matches && node.matches(CHROME_SELECTOR)) return true;
+            if (node.querySelector && node.querySelector(CHROME_SELECTOR)) return true;
+        } catch (e) {}
+        return false;
+    }
+
     function hide(el) {
         if (isHiddenByUs(el)) return;
         window.MyTubeFsHidden.push([
@@ -672,6 +690,35 @@
         }
     }
 
+    /**
+     * Whether [el] can be made `position: relative` so that its z-index counts.
+     *
+     * YouTube draws its chrome as a chain of static host elements around one
+     * absolutely positioned overlay - #player-control-overlay. Those hosts are
+     * zero height in normal flow. Making one of them positioned makes it the
+     * containing block of the overlay, and the overlay is then laid out into a
+     * zero-height box: the controls are still in the page, but nothing paints.
+     * That is the fullscreen with no media control overlay at all.
+     *
+     * So an element is only raised when it carries no other chrome element and
+     * nothing inside it is positioned already. The chain of hosts is left
+     * static, and the chrome at the bottom of it positions itself against the
+     * player container, where it belongs.
+     */
+    function canRaise(el, chrome) {
+        for (var i = 0; i < chrome.length; i++) {
+            var other = chrome[i];
+            if (other && other !== el && el.contains(other)) return false;
+        }
+        var all = el.getElementsByTagName('*');
+        for (var j = 0; j < all.length; j++) {
+            try {
+                if (getComputedStyle(all[j]).position !== 'static') return false;
+            } catch (e) {}
+        }
+        return true;
+    }
+
     /** The player and container the pins are on, so a rebuild can be noticed. */
     var lastPlayer = null;
     var lastContainer = null;
@@ -705,9 +752,17 @@
                 if (m.container.contains(c)) {
                     // Inside the container: it moves with the video already. It only
                     // has to end up above it, which needs a z-index, which needs it
-                    // to be positioned.
+                    // to be positioned. Not every element can take that position
+                    // without becoming the containing block of the control overlay;
+                    // see canRaise. The attribute is removed again when the answer
+                    // changes: YouTube adds the overlay host after the first touch,
+                    // so an element that was safe at entry is not safe any more.
                     c.setAttribute(KEEP_ATTR, '1');
-                    if (getComputedStyle(c).position === 'static') c.setAttribute(RAISE_ATTR, '1');
+                    if (getComputedStyle(c).position === 'static' && canRaise(c, m.chrome)) {
+                        c.setAttribute(RAISE_ATTR, '1');
+                    } else {
+                        c.removeAttribute(RAISE_ATTR);
+                    }
                 } else {
                     // Outside the container: pinned over the video. It must not
                     // swallow the taps meant for the video.
@@ -842,6 +897,13 @@
         }
         var added = pendingAdded;
         pendingAdded = [];
+        // The player chrome is inserted on the first touch, after the model was
+        // last worked out. Recompute instead of acting on a model that has not
+        // seen it yet: the chrome hosts then shed the position that would
+        // collapse the control overlay.
+        for (var i = 0; i < added.length; i++) {
+            if (addsChrome(added[i])) { cachedModel = null; break; }
+        }
         var m = currentModel();
         // Hide what was added outside the player. The full sweep is not run
         // again here: it restores and re-applies display on every element it
@@ -1314,21 +1376,41 @@
      * The app hands the fullscreen to YouTube by tapping YouTube's own button,
      * and what YouTube does with it decides who owns the layout afterwards. If
      * the whole document is in fullscreen, the app's stylesheet still has to
-     * strip the page around the video. If the player itself is in fullscreen,
+     * strip the page around the video. If the player is in fullscreen,
      * YouTube draws its own controls in the right place, and the app's pin only
      * puts them somewhere else.
+     *
+     * YouTube fullscreens #player-container-id, which is the container above
+     * .html5-video-player - not the player element itself. Matching only
+     * descendants of .html5-video-player read that as page fullscreen and kept
+     * the pin on top of YouTube's own fullscreen layout.
+     *
+     * The answer can be "not known yet": the element is still null right after
+     * WebChromeClient.onShowCustomView and only appears a moment later. The app
+     * asks again until it gets a real answer.
      */
     window.MyTubeFsFullscreenElement = function() {
         var e = document.fullscreenElement;
         if (!e) {
-            return { fullscreen: false, isPlayer: false, tag: '', id: '' };
+            return { fullscreen: false, page: false, isPlayer: false, tag: '', id: '' };
         }
+        // documentElement/body is the whole page in fullscreen: the masthead and
+        // the rest of the page come with it, so the pin has to stay on.
+        var page = e === document.documentElement || e === document.body;
         var isPlayer = false;
-        try {
-            if (e.closest && e.closest('.html5-video-player, #movie_player')) isPlayer = true;
-        } catch (err) {}
+        if (!page) {
+            try {
+                isPlayer = !!(
+                    (e.matches && e.matches(
+                        '.html5-video-player, #movie_player, #player-container-id, .player-container, #player'
+                    )) ||
+                    (e.querySelector && e.querySelector('.html5-video-player, #movie_player'))
+                );
+            } catch (err) {}
+        }
         return {
             fullscreen: true,
+            page: page,
             isPlayer: isPlayer,
             tag: e.tagName ? e.tagName.toLowerCase() : '',
             id: e.id || '',

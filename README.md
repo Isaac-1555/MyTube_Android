@@ -59,6 +59,14 @@
 - **Auto-hide bottom bar** — the bar fades away after 5s of inactivity and returns on touch.
 - **Configurable sources** — if a Movies/Anime mirror rotates or goes down, paste a new home URL in Settings; the tab moves there at once.
 
+## What's New in v2.11.3
+
+YouTube's media controls now stay on screen in fullscreen.
+
+- **The control bar, seek bar and gear are back in fullscreen.** YouTube draws its chrome as a chain of static host elements around one absolutely positioned overlay. MyTube was giving those hosts a position so their z-index would count, which made a zero-height host the containing block for the overlay — the controls were in the page but painted into nothing. The hosts are left alone now, so the overlay fills the player and the controls take their own taps again.
+- **Fullscreen handed to YouTube no longer keeps MyTube's pin.** When YouTube puts the player into its own fullscreen, MyTube now releases the page pin. The check used to run before the browser had reported the fullscreen element (and only looked inside the player, not at the container YouTube actually fullscreens), so it always read "whole page" and kept the pin — which pushed YouTube's control bar out of view.
+- **Leaving fullscreen leaves the page clean.** When YouTube's own fullscreen ends, the pin and the fullscreen flag are dropped with it, so the page comes back in portrait with its controls reachable.
+
 ## What's New in v2.11.2
 
 A fix for taps that did the wrong thing — and a small PiP regression caught along the way.
@@ -135,7 +143,7 @@ Under the hood, rotate-to-fullscreen no longer fakes it: MyTube taps YouTube's o
 
 Grab the latest signed APK from the **[Releases page](https://github.com/Isaac-1555/MyTube_Android/releases/latest)**.
 
-Direct download: **[MyTube-v2.11.2-release.apk](https://github.com/Isaac-1555/MyTube_Android/releases/download/v2.11.2/MyTube-v2.11.2-release.apk)**
+Direct download: **[MyTube-v2.11.3-release.apk](https://github.com/Isaac-1555/MyTube_Android/releases/download/v2.11.3/MyTube-v2.11.3-release.apk)**
 
 ### Install on Android
 
@@ -148,7 +156,7 @@ Direct download: **[MyTube-v2.11.2-release.apk](https://github.com/Isaac-1555/My
 ### Install with ADB
 
 ```bash
-adb install MyTube-v2.11.2-release.apk
+adb install MyTube-v2.11.3-release.apk
 ```
 
 ### Requirements
@@ -159,7 +167,7 @@ adb install MyTube-v2.11.2-release.apk
 ### Verify the download (optional)
 
 ```bash
-apksigner verify --print-certs MyTube-v2.11.2-release.apk
+apksigner verify --print-certs MyTube-v2.11.3-release.apk
 ```
 
 The release is signed with APK Signature Scheme v2. Certificate SHA-256:
@@ -248,6 +256,13 @@ Then build:
 `keystore.properties`, `*.jks` and `*.keystore` are git-ignored — never commit your signing keys.
 
 ## Changelog
+
+### v2.11.3 — 2026-11-19
+
+- Fix: fullscreen showed no media control overlay at all. The app's `data-mytube-raise` rule gave `position: relative` to YouTube's static chrome hosts, making a zero-height host the containing block for the absolutely positioned `#player-control-overlay`; the controls were in the page but painted into a 0-height box. A host is only raised when it carries no other chrome and nothing inside it is positioned, and the attribute is removed if that changes when YouTube builds the overlay after the first touch
+- Fix: tapping YouTube's own fullscreen button left the app's CSS pin on. `document.fullscreenElement` is null when `onShowCustomView` fires and becomes `#player-container-id` about 200 ms later, and the old check only matched elements inside `.html5-video-player`, so player fullscreen was read as whole-page fullscreen. The app now retries the check and treats the player container as player fullscreen
+- Fix: the page pin and fullscreen flag are dropped when YouTube's own fullscreen ends, instead of leaving the page stripped and unresponsive in portrait
+- Perf: the player model is recomputed when an added node carries player chrome, so the overlay host sheds its position as soon as the controls exist
 
 ### v2.11.2 — 2026-11-14
 

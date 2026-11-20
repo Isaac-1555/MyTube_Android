@@ -53,6 +53,19 @@ private const val AUTO_PROMOTE_RETRY_MS = 400L
 private const val AUTO_PROMOTE_DEADLINE_MS = 2_500L
 
 /**
+ * How often, and for how long, to ask the page which element it put into
+ * fullscreen after the custom view is handed over.
+ *
+ * `document.fullscreenElement` is still null at the moment
+ * [android.webkit.WebChromeClient.onShowCustomView] runs. On device it becomes
+ * #player-container-id about 200ms later, so a single immediate check always
+ * answered "page" and kept the stylesheet pin on top of YouTube's own
+ * fullscreen layout.
+ */
+private const val OWNER_RETRY_MS = 120L
+private const val OWNER_DEADLINE_MS = 1_200L
+
+/**
  * Owns the native half of video fullscreen: orientation, system bars, cutout.
  *
  * The rule this class exists to enforce: the decision to go fullscreen is never
@@ -486,17 +499,47 @@ class VideoFullscreenController(
         // to strip the page around the video - without it YouTube's masthead
         // stays on screen.
         //
-        // If the player itself is in fullscreen, YouTube draws its own controls
-        // and puts them where they belong. The app's pin then only moves them
+        // If the player is in fullscreen, YouTube draws its own controls and
+        // puts them where they belong. The app's pin then only moves them
         // somewhere else: the control bar came up outside the visible area and
         // the tap on the gear fell through to the video and came out as a
         // play/pause. So the pin is released and YouTube is left alone.
+        //
+        // The answer is not available yet at this point. document.fullscreenElement
+        // is still null when the custom view is handed over and only becomes
+        // #player-container-id a moment later, so asking once always read it as
+        // "page" and kept the pin. It is asked again until the page says.
+        resolveFullscreenOwner(SystemClock.uptimeMillis() + OWNER_DEADLINE_MS, 0)
+    }
+
+    /**
+     * Asks the page which element it actually put into fullscreen, with retries.
+     *
+     * A null or "not in fullscreen" answer means the page has not caught up
+     * with the custom view yet; it is asked again shortly. At the deadline the
+     * pin is left as it was, which is the state that worked before this question
+     * existed.
+     */
+    private fun resolveFullscreenOwner(deadline: Long, attempt: Int) {
+        if (!isNativeFullscreen) return
         webViewManager.evaluateJsInFromMainThread(
             fsMode,
             "window.MyTubeFsFullscreenElement && window.MyTubeFsFullscreenElement()"
         ) { raw ->
-            val isPlayer = parseIsPlayerFullscreen(raw)
-            if (isPlayer) {
+            if (!isNativeFullscreen) return@evaluateJsInFromMainThread
+            val owner = parseFullscreenOwner(raw)
+            if (owner == null || !owner.fullscreen) {
+                if (SystemClock.uptimeMillis() < deadline) {
+                    mainHandler.postDelayed(
+                        { resolveFullscreenOwner(deadline, attempt + 1) },
+                        OWNER_RETRY_MS
+                    )
+                } else {
+                    Log.d(TAG, "enter: fullscreen owner unknown after $attempt tries; page pin kept")
+                }
+                return@evaluateJsInFromMainThread
+            }
+            if (owner.isPlayer) {
                 isCssFullscreen = false
                 webViewManager.setFullscreenCss(fsMode, false)
                 Log.d(TAG, "enter: native fullscreen of the player; page pin released")
@@ -508,19 +551,26 @@ class VideoFullscreenController(
         }
     }
 
+    /** The answer from [video_state.js]'s MyTubeFsFullscreenElement. */
+    private data class FullscreenOwner(
+        val fullscreen: Boolean,
+        val isPlayer: Boolean
+    )
+
     /**
-     * Whether the element in fullscreen is YouTube's player.
-     *
-     * The page answers with a small JSON object; anything that cannot be read
-     * is treated as "not the player", which keeps the page pin - the state that
-     * was in place before this question existed.
+     * Anything that cannot be read is "not answered yet", so the caller retries
+     * instead of deciding on a guess.
      */
-    private fun parseIsPlayerFullscreen(raw: String?): Boolean {
+    private fun parseFullscreenOwner(raw: String?): FullscreenOwner? {
         val body = raw?.trim().orEmpty()
-        if (body.isEmpty() || body == "null") return false
+        if (body.isEmpty() || body == "null" || body == "undefined") return null
         return runCatching {
-            JSONObject(body).optBoolean("isPlayer", false)
-        }.getOrDefault(false)
+            val obj = JSONObject(body)
+            FullscreenOwner(
+                fullscreen = obj.optBoolean("fullscreen", false),
+                isPlayer = obj.optBoolean("isPlayer", false)
+            )
+        }.getOrNull()
     }
 
     fun onNativeFullscreenHidden() {
@@ -531,6 +581,14 @@ class VideoFullscreenController(
         if (isFullscreenActive) {
             isFullscreenActive = false
             restoreWindow()
+        }
+        // The page's own fullscreen is over, so the page pin has no owner left.
+        // A pin left on here stripped the page in portrait and kept YouTube's
+        // controls out of reach - the bug that made the video untappable after
+        // leaving fullscreen. App-initiated teardown already did this in exitAll.
+        if (!tearingDown) {
+            isCssFullscreen = false
+            webViewManager.setFullscreenCss(fsMode, false)
         }
         // They exited by hand. The resolver resolves to Enter again on the very next
         // recomposition, so latch it or we drag them straight back in.
